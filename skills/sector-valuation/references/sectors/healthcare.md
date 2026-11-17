@@ -1,6 +1,6 @@
 # Healthcare Playbooks
 
-Large-cap pharma · Clinical-stage biotech · Medical devices · Life-science tools · Managed care · Providers/services
+Large-cap pharma · Clinical-stage biotech · Medical devices · Life-science tools · Managed care · Home & community care · Hospitals & outsourced providers
 
 ---
 
@@ -70,8 +70,28 @@ Large-cap pharma · Clinical-stage biotech · Medical devices · Life-science to
 
 ---
 
-## Providers & services (hospitals, outsourcing)
+## Home & community care (private-duty nursing, home health, hospice, personal care)
 
-**KPIs:** volumes, payer mix, labor cost per adjusted admission, same-facility growth.
-**Valuation:** EV/EBITDA (lease-adjusted), FCF yield.
-**Traps:** policy-dependent supplemental payments (R3), labor inflation.
+**Value equation:** Hours or episodes × payer rate − caregiver wage & benefits − branch/corporate overhead. The unit of value is the **spread per hour** (rate per hour − wage cost per hour) for hourly services, and the **margin per episode/admission** for home health and hospice. Government payers (state Medicaid/MCOs, Medicare) set the rate; the labor market sets the wage.
+
+**KPIs:** revenue and gross margin by service line · hours (or episodes/admissions) growth, organic vs acquired · rate per hour vs wage per hour → spread per hour and its trend · payer mix (Medicaid FFS, Medicaid MCO, Medicare, commercial) and **preferred-payer** contract share · state concentration (top states % of revenue) and the state budget/rate calendar · caregiver headcount, hiring and turnover · Medicare home-health/hospice final rules (annual) · days sales outstanding · leverage (net debt / adj. EBITDA) and floating-rate exposure, hedges and their expiry.
+
+**If undisclosed:**
+- Spread per hour = (service-line revenue − cost of service) ÷ hours, when hours are disclosed; otherwise infer hours from revenue ÷ published state rates for the main states.
+- Rate tailwinds: state Medicaid budget documents and enacted rate increases (state legislature/Medicaid agency notices); management lists the states on calls.
+- Wage pressure: BLS home-health-aide / LPN / RN wage series by state; minimum-wage schedules.
+- Policy exposure: share of revenue in states affected by federal Medicaid financing changes (provider-tax limits, FMAP changes) and by HCBS rules that mandate a share of payments go to direct-care wages (pass-through rules cap the spread).
+
+**Benchmarks:** private-duty/personal-care gross margins ~25–35%; home health ~45–50%; adjusted EBITDA margins ~8–15% for scaled operators. Leverage above ~4x with floating debt makes equity value highly rate-sensitive.
+
+**Valuation:** 10-yr FCFF DCF on **core** EBIT (SBC expensed; serial-M&A costs kept — R2), with explicit scenarios for the payer rate path. Cross-check EV/adjusted EBITDA vs listed home-care peers, adjusted for leverage and payer mix. Treat acquisitions as value-neutral unless acquired ROIC demonstrably beats WACC. Bridge: subtract securitization/receivable facilities and finance leases as debt; value hedges at their remaining life, not forever.
+
+**Traps:** capitalizing a single year of large state rate increases; ignoring wage pass-through mandates that convert rate increases into wages; valuation-allowance releases inflating GAAP EPS once the company turns profitable; hedge income from caps that are about to expire; adjusted EBITDA that excludes recurring acquisition/integration costs; state budget cycles (rates can be cut as easily as raised).
+
+---
+
+## Hospitals & outsourced providers
+
+**KPIs:** volumes (admissions, adjusted admissions), payer mix, labor cost per adjusted admission, same-facility growth, supplemental Medicaid payments.
+**Valuation:** 10-yr FCFF DCF on core earnings (calculator), cross-checked with lease-adjusted EV/EBITDA and FCF yield vs peers.
+**Traps:** policy-dependent supplemental payments (R3), labor inflation, sale-leaseback gains (R0).

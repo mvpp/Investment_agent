@@ -42,9 +42,11 @@ Core rule: **value is forward FCF and its certainty.** An EV/S of 40 can be chea
 
 ## 2. Discount rate
 
-- Risk-free: current 10-year Treasury yield (look it up; don't assume).
-- Equity risk premium: Damodaran's current implied ERP (pages.stern.nyu.edu/~adamodar) — historically ~4–5.5%.
-- Beta: bottom-up industry unlevered beta (Damodaran dataset) relevered at target D/E; avoid noisy single-stock regressions.
+- Risk-free: current 10-year Treasury yield. Sources in order: FRED series DGS10 (`https://fred.stlouisfed.org/series/DGS10`, fetchable), Treasury.gov daily par yield curve, then a market-data page. Record the date.
+- Equity risk premium: Damodaran's implied ERP, updated monthly (`https://pages.stern.nyu.edu/~adamodar/` → "Implied ERP"). If unreachable, use the last value you can confirm and date it; if none, use 4.5% and say "ERP assumed".
+- Beta: bottom-up **industry unlevered beta** from Damodaran's "Betas by Sector (US)" dataset, relevered at the company's market D/E: βL = βU × (1 + (1 − t) × D/E). If the dataset is unreachable, use the sector's typical unlevered beta (utilities ~0.4, staples ~0.6, healthcare services ~0.8, industrials ~0.9, software ~1.1, semis ~1.3) and label it assumed. Avoid noisy single-stock regressions.
+- No size premium by default (the evidence is weak and it double-counts risks you should model in scenarios); if you add one, show the value with and without it.
+- Cost of debt: current yield on the company's bonds/loans (floating: forward SOFR + spread), after tax.
 - Cost of debt: rating-implied yield or current bond YTM, after tax.
 - Sanity ranges are **spreads over the current 10-yr yield**, not fixed levels (rates move): regulated utilities rf + 2–3%; large-cap staples rf + 3–4%; mega-cap tech rf + 4.5–6%; high-growth/unprofitable tech rf + 6–9%; clinical biotech rf + 7–11% (risk mostly in PoS, not the rate — don't double count). With rf ≈ 4%, mega-cap tech lands at 8.5–10%; with rf ≈ 5%, 9.5–11%.
 - Always show ±1% WACC sensitivity. A conclusion that flips inside ±1% is a low-conviction conclusion.
@@ -100,9 +102,10 @@ Use when segments differ in growth, margins, capital intensity or risk (ads + cl
 - Scenarios are built from **KPI values**, not ±X% on the price. Bear/base/bull each change the 2–3 drivers that matter (e.g. NRR, margin, multiple) — the same drivers named as Key Forces.
 - Probabilities sum to 1 and reflect your evidence, not symmetry. A 25/50/25 default is a sign you haven't thought about it.
 - **Time basis.** A DCF gives value *today*. Give each scenario its `value_today`; `valuation.py scenarios` rolls it to the horizon at (1 + cost of equity − dividend yield)^years. If you instead value at the horizon directly (exit multiple × year-N core EPS), give `value` and the script backs out today's value. Skew and the bear-case check use today's values — horizon values understate downside.
-- **Target price** = probability-weighted value at the horizon (default 3 years, the same horizon as the IRR).
+- **Target price** = probability-weighted value at the horizon (default 3 years, the same horizon as the IRR). A 3-year target includes three years of required return, so "+33% target" can still be a below-hurdle investment — judge it by the expected IRR, never by the % upside.
 - **Expected IRR** = (prob-weighted value / price)^(1/years) − 1 + dividend yield. Hurdle: long ≥ 15% expected IRR; short ≥ 20–25%.
-- **Action price** = the lower of (fair value today × (1 − margin of safety)) and (the max price that still earns the hurdle). This one number goes in the memo header. MOS by quality/predictability: wide moat & predictable 15–20%; narrow moat 25–30%; cyclical, no moat or binary 35–50%.
+- **Action price** = the lower of (fair value today × (1 − margin of safety)) and (the max price that still earns the hurdle). This one number goes in the memo header.
+- **Margin of safety — one rule.** Start from the quality grade (research-playbook §4 scorecard): **A 15% · B 25% · C 35% · D no position**. Add **+10 points** if the business is cyclical, policy-binary (a regulator or government payer sets price) or levered above ~3.5x net debt/EBITDA; add another +10 if two or more apply. Cap at 50%. State the arithmetic in the memo ("C 35% + policy-binary 10 = 45%").
 - Skew = (bull − price)/(price − bear). Prefer ≥ 2:1. Size the position for the bear case, not the expected value.
 - `valuation.py scenarios` computes all of the above.
 

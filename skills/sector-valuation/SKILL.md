@@ -19,7 +19,7 @@ Identify the business model of each material segment (a company can need two pla
 | Software/SaaS, consumer subscription, ad platforms, marketplaces/e-commerce, semis, hardware, AI infrastructure | `references/sectors/tech.md` |
 | Banks, insurers, asset managers, brokers, payments, stablecoins/crypto | `references/sectors/financials.md` |
 | E&P, midstream, refiners, majors, oilfield services, mining, chemicals | `references/sectors/energy-materials.md` |
-| Pharma, biotech, medtech, tools, managed care, providers | `references/sectors/healthcare.md` |
+| Pharma, biotech, medtech, tools, managed care, home & community care (PDN, home health, hospice), hospitals | `references/sectors/healthcare.md` |
 | Retail, restaurants, staples, autos/EVs, industrials, aerospace & defense, airlines, space/early-stage | `references/sectors/consumer-industrial.md` |
 | REITs, utilities, telecom/cable, towers, conglomerates/holdcos | `references/sectors/real-assets-telecom.md` |
 
@@ -55,7 +55,7 @@ For NAV-style models (E&P, mining, REITs), compute component values (PV-10 adjus
 If methods disagree by >25%, explain which input drives the gap rather than averaging it away.
 
 ### Step 7 — Scenarios, target, action price
-Bear/base/bull built by changing the Step 2 KPIs (not ±X% on price), with evidence-based probabilities. Run `scenarios` (give each scenario its DCF `value_today` and the `cost_of_equity`) for target price (default 3-yr horizon), expected IRR (long hurdle ≥15%), skew (prefer ≥2:1), and the action price = lower of fair value × (1 − MOS; 15–20% wide moat, 25–30% narrow, 35–50% cyclical/binary) and the max price that earns the hurdle.
+Bear/base/bull built by changing the Step 2 KPIs (not ±X% on price), with evidence-based probabilities. Run `scenarios` (give each scenario its DCF `value_today` and the `cost_of_equity`) for target price (default 3-yr horizon), expected IRR (long hurdle ≥15%), skew (prefer ≥2:1), and the action price = lower of fair value × (1 − MOS) and the max price that earns the hurdle. MOS follows one rule (valuation-core §7): quality grade A 15% / B 25% / C 35%, +10 points each for cyclical, policy-binary or high leverage (two or more), capped at 50%.
 
 ## Output (feeds memo §2 and §5 — keep it to this)
 

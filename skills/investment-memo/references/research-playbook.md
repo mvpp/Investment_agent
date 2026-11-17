@@ -111,7 +111,7 @@ Run these after the valuation draft, then revise the target, probabilities or ra
 
   For a watchlist name, write kill conditions as "if bought at the action price, exit if…". Low conviction + Avoid = watchlist, not a short.
 - **Conviction:** High / Medium / Low, driven by evidence quality on the Key Forces and how sensitive the value is to the uncertain inputs.
-- **Action price in the header** = the lower of (fair value today × (1 − MOS)) and (the max price that still earns the hurdle) — `valuation.py scenarios` prints it.
+- **Action price in the header** = the lower of (fair value today × (1 − MOS)) and (the max price that still earns the hurdle) — `valuation.py scenarios` prints it. MOS comes from the quality grade, not taste: A 15% · B 25% · C 35%, +10 points each for cyclical / policy-binary / levered >3.5x (two or more), cap 50% (valuation-core §7).
 - **Sizing guidance** (default; the user's own rules override): High conviction & bear-case loss <25% → full position; Medium → half; Low → starter or watchlist. Size for the bear case.
 - **Kill conditions** — 2–4, each tied to a thesis pillar, measurable, dated, and leading to exit **regardless of price**. "If NRR < 105% for two consecutive quarters by Q2'27 → exit" passes; "if growth slows" doesn't. Distinct from a price stop.
 - **Monitoring** — the 3–5 KPIs from the value-driver tree, each with current value, what the thesis needs, and a red line; plus a dated catalyst calendar and add/trim/exit triggers.

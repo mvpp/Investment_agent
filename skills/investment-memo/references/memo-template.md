@@ -10,7 +10,9 @@ Notation: `(E)` estimate · `(I)` inference · `⚠ verify` unconfirmed · citat
 # $TICKER — <thesis in ≤15 words: the variant view, not a description>
 
 As of YYYY-MM-DD · Price $X · Mkt cap $XB · EV $XB · **Rating: BUY / AVOID (watchlist) / AVOID — or for holders ADD / HOLD / TRIM / SELL** · Conviction: High/Med/Low
-**Target (prob-weighted, <horizon, default 3 yr>): $X (+Y%)** · Fair value today $X · Action price ≤ $X · Expected IRR X% · Skew X:1 (or "n/a — price above bull case") · Position: full / half / starter / none
+**Target (prob-weighted, <horizon, default 3 yr>): $X (+Y%)** · Fair value today $X · Action price ≤ $X · Expected IRR X% vs hurdle 15% · Skew X:1 (or "n/a — price above bull case") · Position: full / half / starter / none
+
+<If the rating looks at odds with the target's % upside — e.g. AVOID with a +30% 3-yr target — add one line under the header: "3-yr target includes the required return; expected IRR X% < hurdle 15%.">
 
 ## 1. Thesis & Variant View  (≤220 words + 1 table)
 

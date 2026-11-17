@@ -55,7 +55,7 @@ Core CFO = CFO ex one-off cash items (settlements paid, cash-tax timing benefits
 ### Step 7 — Run the bridge
 Write the input JSON (schema in `scripts/core_eps.py` docstring; worked example `examples/core_eps_input.json` — META Q3-25) and run `python3 scripts/core_eps.py input.json`. Do it for TTM (and FY if useful).
 - **Errors stop the calculation** (exit code 2, no core number): GAAP numerator / diluted shares not tying to reported diluted EPS within $0.02; missing or duplicate `event_id`; missing source; missing tax basis or rate; non-deductible items carrying tax; R0/R1/R3 without recurrence evidence; SBC removed; a GAAP loss turned into core profit without a recomputed `core_diluted_shares` (anti-dilutive securities enter the count once earnings are positive). Fix the input; never work around them.
-- **Warnings** go into the memo as a sentence each: implied tax rates outside 0–60%, fewer than 8 quarters reviewed, "one-offs" with repeated similar events, one-directional adjustments, sector-overlay flags, abnormal core tax rate, low cash conversion.
+- **Warnings** go into the memo as a sentence each (estimated discrete tax items included): implied tax rates outside 0–60%, fewer than 8 quarters reviewed, "one-offs" with repeated similar events, one-directional adjustments, sector-overlay flags, abnormal core tax rate, low cash conversion.
 - For TTM, sum four quarters' numerators and use the average of the four quarters' diluted shares; the tie-out then compares against the sum of the four reported quarterly EPS figures (allow a few cents for rounding).
 
 ### Step 8 — Forensic pass

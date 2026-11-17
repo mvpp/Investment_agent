@@ -92,12 +92,10 @@ def cmd_list(a):
     forms = set(a.forms.split(",")) if a.forms else None
     print(f"# {d.get('name')} (CIK {cik})\n")
     print("| Form | Filed | Period | Description | Accession | URL |\n|---|---|---|---|---|---|")
+    matches = [i for i in range(len(r["form"]))
+               if (not forms or r["form"][i] in forms) and not (a.since and r["filingDate"][i] < a.since)]
     n = 0
-    for i in range(len(r["form"])):
-        if forms and r["form"][i] not in forms:
-            continue
-        if a.since and r["filingDate"][i] < a.since:
-            continue
+    for i in matches:
         acc = r["accessionNumber"][i]
         url = f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc.replace('-', '')}/{r['primaryDocument'][i]}"
         desc = (r["primaryDocDescription"][i] or "") + (f" items {r['items'][i]}" if r.get("items") and r["items"][i] else "")
@@ -105,7 +103,13 @@ def cmd_list(a):
         n += 1
         if n >= a.limit:
             break
-    print("\n8-K item codes: 1.01 material agreement · 2.02 results · 2.03 new debt · 3.02 unregistered equity · 5.02 officer change · 7.01/8.01 other events")
+    if len(matches) > n:
+        print(f"\n⚠ Showing {n} of {len(matches)} matching filings — raise --limit or narrow --forms/--since to see the rest.")
+    else:
+        print(f"\nAll {n} matching filings shown.")
+    if len(r["form"]) and a.since and r["filingDate"][-1] > a.since:
+        print("Note: SEC's 'recent' feed (last ~1,000 filings) may not reach back to --since for very active filers.")
+    print("8-K item codes: 1.01 material agreement · 2.02 results · 2.03 new debt · 3.02 unregistered equity · 5.02 officer change · 7.01/8.01 other events")
 
 
 def cmd_docs(a):
@@ -147,7 +151,7 @@ def main():
     p.add_argument("company", help="ticker or CIK")
     p.add_argument("--forms", default="10-K,10-Q,8-K")
     p.add_argument("--since")
-    p.add_argument("--limit", type=int, default=25)
+    p.add_argument("--limit", type=int, default=60)
     p = sub.add_parser("docs")
     p.add_argument("company")
     p.add_argument("accession")

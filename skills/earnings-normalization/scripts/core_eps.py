@@ -53,7 +53,8 @@ Classes:
       Add "investment": true for discretionary investment segments (e.g. Reality
       Labs, Other Bets) to also get a core-ex-investment EPS for SOTP work.
   R3  cyclical / macro-driven   -> replace with normal_pretax (mid-cycle level)
-  TAX discrete tax item         -> remove after_tax amount; for a recurring but volatile tax
+  TAX discrete tax item         -> remove after_tax amount; "tax_basis": "filing_specific" (default,
+      amount disclosed) or "normalized_estimate" (you sized it — warned); for a recurring but volatile tax
       item (excess SBC tax benefits, R3-like) add "normal_after_tax" (the multi-year normal
       level, same sign convention) plus recurrence evidence — only the excess is removed
   EST accounting-estimate change -> informational unless "apply": true; put the
@@ -207,6 +208,11 @@ def run(cfg):
 
         if cls == "TAX":
             amt = a["after_tax"]
+            tb = a.get("tax_basis", "filing_specific")
+            if tb not in ("filing_specific", "normalized_estimate"):
+                errors.append(f"'{name}': TAX items take tax_basis filing_specific (amount disclosed) or normalized_estimate (sized by you).")
+            elif tb == "normalized_estimate":
+                warnings.append(f"'{name}': discrete tax item sized by estimate, not disclosed — mark it (E) in the memo and show EPS without it if material.")
             if "normal_after_tax" in a:  # recurring-but-volatile tax item (e.g. excess SBC tax benefits): remove only the excess
                 check_recurrence(a, "TAX (normalized)", name, errors, warnings)
                 amt = amt - a["normal_after_tax"]

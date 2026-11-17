@@ -139,12 +139,23 @@ def split_factor(splits, filed):
     return f
 
 
+def _anchor(end):
+    """52/53-week filers end periods on a weekday near month end (e.g. 2026-01-03 for a
+    'December' year). Shifting back 7 days maps the period to the month it really closes."""
+    a = d(end) - dt.timedelta(days=7)
+    return a.year, a.month
+
+
+def fiscal_year(end, fye_month):
+    y, m = _anchor(end)
+    return y if m <= fye_month else y + 1
+
+
 def fiscal_label(end, fye_month):
     """'FY26 Q1' style label for a quarter ending on `end` given the fiscal-year-end month."""
-    y, m = int(end[:4]), int(end[5:7])
-    fy = y if m <= fye_month else y + 1
+    y, m = _anchor(end)
     q = ((m - fye_month - 1) % 12) // 3 + 1
-    return f"FY{fy % 100:02d} Q{q}"
+    return f"FY{fiscal_year(end, fye_month) % 100:02d} Q{q}"
 
 
 def facts_for(gaap, tags, kind, splits=(), is_eps=False):
@@ -183,6 +194,12 @@ def facts_for(gaap, tags, kind, splits=(), is_eps=False):
                 out.setdefault(k, (v[0], v[1]))
         first = min(end_of(k) for k in best)
         floor = first if floor is None else min(floor, first)
+    if kind == "per" and not is_eps and len(out) >= 3:
+        # filers occasionally tag share counts in thousands; repair values ~1000x below the median
+        med = sorted(v[0] for v in out.values())[len(out) // 2]
+        for k, (v, tag) in list(out.items()):
+            if v and med and 0.5 < v * 1000 / med < 2:
+                out[k] = (v * 1000, tag + " (x1000 scale fix)")
     return out
 
 
@@ -213,7 +230,7 @@ def annual(periods):
     a = {}
     for (s, e), (v, tag) in periods.items():
         if 350 <= (d(e) - d(s)).days <= 380:
-            a[e] = (v, tag)
+            a[e] = (v, tag, s)
     return a
 
 
@@ -244,21 +261,25 @@ def build(cik, ua, n_years, n_q):
     derive_q4_per_share(rows)
     years = sorted(year_ends)[-n_years:]
     quarters = sorted(q_ends)[-n_q:]
-    months = [int(e[5:7]) for e in year_ends]
+    months = [_anchor(e)[1] for e in year_ends]
     fye = max(set(months), key=months.count) if months else 12
     meta = {"splits": splits, "fye_month": fye}
     return data.get("entityName", ""), rows, years, quarters, meta
 
 
 def derive_q4_per_share(rows):
-    """Q4 diluted shares ~= 4 x FY weighted average − (Q1+Q2+Q3); Q4 EPS = Q4 NI / Q4 shares."""
+    """Q4 diluted shares from the day-weighted identity FY_avg x FY_days = sum(q_avg x q_days)
+    (handles 14-week quarters in 53-week years); Q4 EPS = Q4 NI / Q4 shares."""
     sh, eps, ni = rows["sh_dil"], rows["eps_dil"], rows["net_income"]
-    for fy_end, (fy_sh, tag) in sh["annual"].items():
+    for fy_end, (fy_sh, tag, fy_start) in sh["annual"].items():
         if fy_end in sh["quarter"]:
             continue
-        qs = [v[0] for e, v in sh["quarter"].items() if 0 < (d(fy_end) - d(e)).days < 300]
-        if len(qs) == 3:
-            q4 = 4 * fy_sh - sum(qs)
+        qe = sorted(e for e in sh["quarter"] if 0 < (d(fy_end) - d(e)).days < 300)
+        if len(qe) == 3:
+            bounds = [fy_start] + qe + [fy_end]
+            days = [(d(b) - d(a)).days for a, b in zip(bounds, bounds[1:])]
+            days[0] += 1  # fiscal start date is the first day of Q1
+            q4 = (fy_sh * sum(days) - sum(sh["quarter"][e][0] * n for e, n in zip(qe, days[:3]))) / days[3]
             sh["quarter"][fy_end] = (q4, tag, True)
             if fy_end not in eps["quarter"] and fy_end in ni["quarter"] and q4 > 0:
                 eps["quarter"][fy_end] = (ni["quarter"][fy_end][0] / q4, "derived NI/shares", True)
@@ -276,17 +297,18 @@ def ttm_eps(rows, quarters):
 
 def etr_line(rows, years, quarters, fye=12):
     """Effective tax rate per period; flags periods that need a read of the tax note
-    (outside 5–35%, or >8 points away from the company's own median rate)."""
+    (outside 5–35%, or >8 points away from the median of its normal-range periods)."""
     obs = []
     for label, src, ends in (("FY", "annual", years), ("Q", "quarter", quarters)):
         for e in ends:
             t, p = rows["tax"][src].get(e), rows["pretax"][src].get(e)
             if t and p and p[0]:
-                tag = fiscal_label(e, fye) if label == "Q" else f"FY{int(e[:4]) if int(e[5:7]) >= fye else int(e[:4]) + 1}"
+                tag = fiscal_label(e, fye) if label == "Q" else f"FY{fiscal_year(e, fye)}"
                 obs.append((tag, t[0] / p[0]))
     if not obs:
         return []
-    med = sorted(r for _, r in obs)[len(obs) // 2]
+    normal = sorted(r for _, r in obs if 0.05 <= r <= 0.35)
+    med = normal[len(normal) // 2] if normal else 0.21  # baseline from normal-range periods only
     return [f"{tag} {r * 100:.1f}%" + (" ⚠ discrete item likely — read the income-tax note" if (r < 0.05 or r > 0.35 or abs(r - med) > 0.08) else "")
             for tag, r in obs]
 
@@ -355,7 +377,7 @@ def main():
     if split_note:
         print(f"⚠ Stock split detected: {split_note}. Per-share data and share counts are all on the post-split basis.")
     print()
-    hdr = ["Item"] + [f"FY{int(e[:4]) if int(e[5:7]) >= fye else int(e[:4]) + 1} ({e[:7]})" for e in years] + [f"{fiscal_label(e, fye)} ({e[:7]})" for e in quarters] + ["TTM", "tag"]
+    hdr = ["Item"] + [f"FY{fiscal_year(e, fye)} ({e[:10]})" for e in years] + [f"{fiscal_label(e, fye)} ({e[:10]})" for e in quarters] + ["TTM", "tag"]
     print("| " + " | ".join(hdr) + " |")
     print("|" + "---|" * len(hdr))
     for key, r in rows.items():
@@ -388,7 +410,8 @@ def main():
             continue  # not tagged for 2+ years: noise, not data
         stale = f"  ⚠ stale: last tagged {ends[-1]}, latest quarter {latest} — read the current filing" if latest and ends[-1] < latest else ""
         print(f"- {r['label']}: " + "; ".join(f"{e}: {fmt(scale(key, r['inst'][e][0]))}" for e in ends) + f"  [{r['inst'][ends[-1]][1]}]{stale}")
-    print("\nCaveats: tags vary by filer — a blank row means 'not tagged', not 'zero'. Verify any number you rely on against the filing text.")
+    print("\nDerived Q4 diluted shares/EPS (*) are approximate: diluted counts are not additive when quarters swing between loss and profit (anti-dilution); prefer the 10-K's Q4 figure when the filing shows it.")
+    print("Caveats: tags vary by filer — a blank row means 'not tagged', not 'zero'. Verify any number you rely on against the filing text.")
 
 
 if __name__ == "__main__":

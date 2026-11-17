@@ -46,7 +46,7 @@ Start from management's quantified items (they are usually right about *what*), 
 |---|---|---|---|
 | Catch-up license / patent settlement revenue (past periods) | R0 | Remove the catch-up portion; keep the go-forward run-rate | Settlement-driven royalty catch-ups at chip licensors |
 | Contract termination fees, one-off milestone payments | R0 (or R1 for biotech with steady milestones) | Remove | |
-| 53rd week / extra selling days | R0 | Remove ~1/52 of the year's revenue and its profit at incremental margin | Retailers, restaurants |
+| 53rd week / extra selling days | R0 | Remove the extra week's revenue (`revenue_adjustments`) and its operating profit at the incremental margin; also its interest expense if material | Retailers, restaurants, healthcare services on 52/53-week calendars. A TTM that contains the 14-week quarter carries the extra week too: remove 1/14 of that quarter's revenue and profit (or management's quantification if given) |
 | Acquired revenue (first 12 months) | — | Not removed from core revenue, but report **organic** growth separately | Growth quality |
 | FX translation | R3 | Report constant-currency growth; don't adjust level unless FX is far from normal | |
 | Pull-forward / channel fill / price-increase pre-buying | R0 or R3 | Remove the excess vs sell-through; check DSO and channel inventory | Hardware, semis, consumer |
@@ -102,6 +102,7 @@ Start from management's quantified items (they are usually right about *what*), 
 | Item | Class | Treatment |
 |---|---|---|
 | Tax-law change remeasurement of deferred taxes (e.g. a DTA valuation allowance after a new law) | TAX | Remove full after-tax amount |
+| Valuation-allowance release when a company turns profitable | TAX | Remove the amount in the **tax-rate reconciliation** (the P&L effect), not the change in the allowance balance — the balance also moves with acquisitions, OCI and expirations. Size any undisclosed residual as `normalized_estimate` |
 | Valuation-allowance establishment/release | TAX | Remove |
 | Audit settlements, uncertain-tax-position releases | TAX | Remove |
 | Intra-entity IP transfer step-ups | TAX | Remove the one-time benefit; note future cash-tax effect |
@@ -180,6 +181,7 @@ Rule: estimates are legitimate GAAP, so Core EPS keeps them. The memo states the
 5. Burden of proof is on removal: if the filing text doesn't support "non-recurring", keep it.
 
 **Run-rate for R1:** average of the item over 5 years (include zeros). For big-tech legal costs, a 3-5 year average is a reasonable "cost of doing business".
+- **Short history** (recent IPO, spin-off, new disclosure line): use every year available (minimum the last 8 quarters, annualized), state the window in `recurrence.assessment`, and prefer the higher of (window average) and (peer cost as % of revenue) for costs — a short window understates lumpy items. Pull older years with `sec_facts.py --years 15` and the S-1/Form 10 for pre-IPO history.
 
 **Tax effect:**
 - Deductible items: use the jurisdiction's marginal rate (US federal 21% + state ≈ 23-25%, or the company's effective marginal rate if disclosed).
