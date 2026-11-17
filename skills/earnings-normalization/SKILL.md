@@ -22,16 +22,16 @@ Goal: answer "what does this business earn in a normal year at its current scale
 
 Script and reference paths are relative to this skill's directory.
 
-### Step 1 — Pull the numbers
-- Run `python3 scripts/sec_facts.py <TICKER> --years 5 --quarters 8` (set `SEC_USER_AGENT="Name email"` first; use `--cik` if ticker lookup fails). It prints 5 fiscal years, 8 discrete quarters and TTM for P&L, one-off candidates (restructuring, impairments, legal, investment gains, deferred tax), cash flow (CFO, capex, finance-lease principal, SBC, buybacks) and the balance sheet. Quarters marked `*` are derived from YTD differencing.
-- Read filing text with `python3 scripts/filings.py`: `list <TICKER> --forms 8-K,10-Q,10-K` → `docs <TICKER> <accession>` (find the Ex-99.1 earnings release) → `text <url> --grep "legal|accru|valuation allowance|discrete|restructur|impair|useful li"`. Many one-offs (legal accruals, discrete tax items) are not XBRL-tagged and live only in notes and releases. Get the call transcript via web search; never rely on memory for figures.
-- **Release out, 10-Q/10-K not yet filed** (common for 2–6 weeks after quarter end): XBRL stops at the last filed period, so sec_facts' TTM is stale. Build the latest period from the 8-K Ex-99.1:
-  - P&L and balance sheet come from the release; the new quarter = release full-year (or YTD) − the prior 10-Q YTD (sec_facts gives those).
+### Step 1 — Read the filings and build the data sheet
+- Fetch and read the 10-K, 10-Qs, earnings releases (8-K EX-99.1) and every 8-K after the period end yourself, following `references/reading-filings.md`: where each document lives, how to get exact statement tables (R pages via `FilingSummary.xml`), precision and cross-footing rules, and the data-sheet checklist (5 fiscal years + 8 quarters + TTM, the EPS-note numerator, every debt line incl. the revolver, off-balance-sheet receivable sales, splits, ETR per period). No script does this — parsed XBRL feeds pick wrong tags often enough to corrupt the bridge.
+- Many one-offs (legal accruals, discrete tax items, refunds) are not tagged at all and live only in notes, releases and the call. Get the call transcript via web search; never rely on memory for figures.
+- **Release out, 10-Q/10-K not yet filed** (common for 2–6 weeks after quarter end). Build the latest period from the 8-K Ex-99.1:
+  - P&L and balance sheet come from the release; the new quarter = release full-year (or YTD) − the prior 10-Q YTD.
   - Cash flow is often missing from releases. If so, estimate quarter CFO = Δ(cash + short-term investments) + capex + dividends + buybacks − net debt raised − other financing (disclosed items only), and SBC / D&A from the prior run-rate. Mark every such number `(E)` and say "pending 10-K" in the memo.
   - Notes (tax, legal, estimate changes) aren't in the release: use management's quantified items from the release and call; list the note checks to redo when the filing lands (Update mode).
   - If the call is the same day and no transcript exists yet, use the release's prepared commentary and say the call wasn't reviewed.
-- sec_facts restates share counts and EPS across stock splits automatically (it prints the split it found) and labels columns by **fiscal** quarter — check the split note before comparing per-share numbers with other sources.
-- Spikes in the sec_facts table are your first candidate list (a G&A line that triples, a flagged ETR). The tax row is **total** tax: size the discrete item from the tax note and remove only that, not the whole line.
+- Restate per-share history across stock splits and label columns by **fiscal** period before comparing with other sources.
+- Spikes in the data sheet are your first candidate list (a G&A line that triples, an ETR far from its norm). The tax line is **total** tax: size the discrete item from the tax note and remove only that, not the whole line.
 
 ### Step 2 — Sweep for candidates
 Read `references/adjustment-catalog.md` §1 (search map) and walk §2–§9: revenue, operating costs, non-operating, tax, share count, investment segments, estimate changes, cash-flow-only items. Start with what management quantified, then hunt for what it didn't (gains, estimate changes, cash-tax timing).
@@ -41,7 +41,7 @@ Classes: **R0** one-off (remove) · **R1** lumpy-recurring (replace with 5-yr ru
 For every R0/R1/R3 item record the evidence: quarters reviewed (aim for 8+), similar events found, and a one-line assessment. Check the sector overlays in catalog §12 (banks, insurers, REITs, commodity producers, retailers, drug developers) — some "unusual" items are ordinary business there.
 
 ### Step 4 — Quantify and tax-effect
-For each item set a `tax_basis` — `filing_specific` (the company disclosed the tax effect), `jurisdiction_specific` (researched rate for where it's deductible), `normalized_estimate` (analyst estimate — say so), `not_deductible` or `no_tax_effect` (zero tax) — and give `tax_rate` or the explicit `tax_effect`. Government fines and goodwill impairments are usually non-deductible. Discrete tax items are already after-tax (class TAX).
+For R1/R3 items the tax applies to the net adjustment (charge − run-rate); if the filing gives the tax on the gross charge, enter it as `gross_tax_effect`. For each item set a `tax_basis` — `filing_specific` (the company disclosed the tax effect), `jurisdiction_specific` (researched rate for where it's deductible), `normalized_estimate` (analyst estimate — say so), `not_deductible` or `no_tax_effect` (zero tax) — and give `tax_rate` or the explicit `tax_effect`. Government fines and goodwill impairments are usually non-deductible. Discrete tax items are already after-tax (class TAX).
 
 ### Step 5 — Core revenue
 Core revenue = reported − one-off revenue items. Also report organic, constant-currency growth when M&A or FX matter.

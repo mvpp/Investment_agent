@@ -34,7 +34,7 @@ Classes: **R0** true one-off (remove) · **R1** lumpy-recurring (replace with ru
 | Notes: PP&E / Significant accounting policies | Useful-life changes, capitalization policy | "useful life", "change in estimate", "depreciation expense would have" |
 | Cash-flow statement (operating section) | Non-cash add-backs, working-capital swings, deferred taxes | Each adjustment line vs prior years |
 | MD&A "Results of Operations" | Management's own bridge of changes | "primarily due to", "partially offset by" |
-| `scripts/sec_facts.py` output | 5-year / 8-quarter history of candidate tags | Spikes in restructuring, impairment, legal, investment gains, tax |
+| Your data sheet (`reading-filings.md` §3) | 5-year / 8-quarter history of candidate lines | Spikes in restructuring, impairment, legal, investment gains, refunds, ETR |
 
 Start from management's quantified items (they are usually right about *what*), then go hunting for what they did not mention (they are often silent about gains).
 
@@ -46,7 +46,7 @@ Start from management's quantified items (they are usually right about *what*), 
 |---|---|---|---|
 | Catch-up license / patent settlement revenue (past periods) | R0 | Remove the catch-up portion; keep the go-forward run-rate | Settlement-driven royalty catch-ups at chip licensors |
 | Contract termination fees, one-off milestone payments | R0 (or R1 for biotech with steady milestones) | Remove | |
-| 53rd week / extra selling days | R0 | Remove the extra week's revenue (`revenue_adjustments`) and its operating profit at the incremental margin; also its interest expense if material | Retailers, restaurants, healthcare services on 52/53-week calendars. A TTM that contains the 14-week quarter carries the extra week too: remove 1/14 of that quarter's revenue and profit (or management's quantification if given) |
+| 53rd week / extra selling days | R0 | Remove the extra week's revenue (`revenue_adjustments`) and its operating profit at the incremental margin; also its interest expense if material | Retailers, restaurants, brands, healthcare services on 52/53-week calendars. A TTM that contains the 14-week quarter carries the extra week too. Size it as **that week**, not an average week: (1) management's quantification (release, call, guidance bridge); (2) else the same calendar week's share of the prior year (the post-holiday week in January is far below average for retailers and wholesale brands); (3) 1/14 of the quarter only for businesses with flat weekly sales. Mark (2) and (3) `(E)` |
 | Acquired revenue (first 12 months) | — | Not removed from core revenue, but report **organic** growth separately | Growth quality |
 | FX translation | R3 | Report constant-currency growth; don't adjust level unless FX is far from normal | |
 | Pull-forward / channel fill / price-increase pre-buying | R0 or R3 | Remove the excess vs sell-through; check DSO and channel inventory | Hardware, semis, consumer |
@@ -69,6 +69,7 @@ Start from management's quantified items (they are usually right about *what*), 
 | Legal accruals, settlements, regulatory fines | R1 for mega-caps and regulated businesses | Run-rate = multi-year average; fines usually **non-deductible** (tax rate 0) — see "Legal run-rate" below | For platforms facing continuous antitrust/privacy action, legal cost is a cost of doing business |
 | Inventory write-downs from a discrete event (e.g. export ban) | R0 | Remove; but watch for later reversal (gain) when inventory sells | Semis export-control charges |
 | Routine inventory obsolescence | R2 | Keep | |
+| **Refunds or recoveries of costs expensed in earlier periods** — tariff/duty refunds (e.g. after a court strikes the tariff down), customs drawback catch-ups, insurance recoveries of prior losses, settlements received, tax-credit catch-ups booked in opex (ERC), prior-year vendor rebates | R0 | Remove the whole recovery (negative adjustment) **and** any interest received on it; tax at the jurisdiction rate. Remove the cash inflow from core CFO (negative `one_off_cash`) | Remove even when the company keeps it in adjusted EPS (§11). The cost it refunds is a separate question: if it is still being incurred (replacement tariffs in force), keep the current cost in core (R2) and model its change as a scenario; if a cost has ended for good, adjust forward estimates, not the historical core |
 | M&A transaction & integration costs | R0 for rare acquirers; R2 for serial acquirers | | Roll-ups: integration is the business model |
 | Amortization of acquired intangibles | R2 in Core EPS | Keep in Core EPS; may exclude in *owner-earnings* view only if no future acquisitions needed to sustain growth | Many company non-GAAP figures exclude it — reverse that |
 | Stock-based compensation | **R2 always** | Keep. Exception: one-time IPO RSU catch-up (double-trigger RSUs recognized at IPO) → R0 | It is real dilution; non-GAAP that adds it back overstates earnings |
@@ -79,7 +80,7 @@ Start from management's quantified items (they are usually right about *what*), 
 | Gains on sale of PP&E / businesses (recorded in opex) | R0 | Remove (negative adjustment) | |
 | Reserve releases (warranty, bad debt, returns) | R3 | Normalize to historical provision rate | Cookie-jar check |
 
-**Legal run-rate — data path.** (1) Pull every quantified legal charge and reversal for 5 years from 8-K releases and 10-Q/10-K notes (`filings.py text <url> --grep "legal|accru|settle"`; the "accrued liabilities" note often has a legal-accruals line). (2) Net reversals against charges in the year they occur. (3) Run-rate = 5-yr net total ÷ 5 (include zero years). (4) If quantification is patchy, bound it: lower = quantified items only; upper = G&A growth in excess of headcount/comp growth; pick within the range and mark `(E)`. (5) Multi-year installment settlements: the accrual is the P&L event (R1 via the run-rate); the cash goes out over years — in core CFO, charge the run-rate cash cost, not the year's actual installment. (6) Contingent amounts not yet accrued: disclose as a risk/EV-bridge item, not in core EPS.
+**Legal run-rate — data path.** (1) Pull every quantified legal charge and reversal for 5 years from 8-K releases and 10-Q/10-K notes (the commitments & contingencies note, and the "accrued liabilities" note, which often has a legal-accruals line). (2) Net reversals against charges in the year they occur. (3) Run-rate = 5-yr net total ÷ 5 (include zero years). (4) If quantification is patchy, bound it: lower = quantified items only; upper = G&A growth in excess of headcount/comp growth; pick within the range and mark `(E)`. (5) Multi-year installment settlements: the accrual is the P&L event (R1 via the run-rate); the cash goes out over years — in core CFO, charge the run-rate cash cost, not the year's actual installment. (6) Contingent amounts not yet accrued: disclose as a risk/EV-bridge item, not in core EPS.
 
 ---
 
@@ -121,7 +122,7 @@ Formula: normalized cash tax = core pretax income × core ETR (minus any *durabl
 - Use **diluted** weighted shares; for a GAAP loss, the diluted count excludes anti-dilutive securities — use the fully diluted count (treasury method on options/RSUs, if-converted on converts) when core earnings are positive.
 - For forward EPS, project shares: net dilution = SBC grants − buybacks. If buybacks merely offset SBC, there's no shareholder return — note it.
 - Watch for share-count bumps from converts crossing conversion price, and from acquisitions paid in stock.
-- **Post-period capital actions** (check every 8-K after the period end with `filings.py list`):
+- **Post-period capital actions** (read every 8-K filed after the period end — `reading-filings.md` §1):
   - Forward equity sales / ATM programs: add the shares (and the cash at settlement) to the pro-forma count used for valuation.
   - Mandatory convertible preferred: treat as equity — add the shares at the conversion rate implied by the current price (between the min and max rates), and do not also subtract the preferred as debt; preferred dividends reduce EPS until conversion.
   - Optional converts: if-converted when in the money; otherwise debt.
@@ -180,8 +181,10 @@ Rule: estimates are legitimate GAAP, so Core EPS keeps them. The memo states the
 4. Does a gain of the same type get treated symmetrically? If you remove losses, remove gains.
 5. Burden of proof is on removal: if the filing text doesn't support "non-recurring", keep it.
 
-**Run-rate for R1:** average of the item over 5 years (include zeros). For big-tech legal costs, a 3-5 year average is a reasonable "cost of doing business".
-- **Short history** (recent IPO, spin-off, new disclosure line): use every year available (minimum the last 8 quarters, annualized), state the window in `recurrence.assessment`, and prefer the higher of (window average) and (peer cost as % of revenue) for costs — a short window understates lumpy items. Pull older years with `sec_facts.py --years 15` and the S-1/Form 10 for pre-IPO history.
+**Run-rate for R1:** default = average of the item over 5 years (include zeros). For big-tech legal costs, a 3-5 year average is a reasonable "cost of doing business".
+- **Forward run-rate** — use instead of the 5-yr average only when the history is demonstrably unrepresentative and a filing documents why: (a) a turnaround or restructuring program with a disclosed size and end date, now complete; (b) a legacy liability (environmental, product, litigation) whose big accrual is already booked and whose remaining cost is estimated in the notes; (c) recoveries that have ended (insurance coverage exhausted) — drop them from the run-rate, which raises the cost. Base the forward figure on the disclosed remaining cost, the last 4–8 quarters' trend and guidance with a delivery record; never set it below the trailing 8-quarter average unless the program end is documented.
+- Show both: put the one you use in `normal_pretax` and the other in `alt_normal_pretax` (with `alt_label`); `core_eps.py` prints core EPS under each and warns when they differ by more than 5%. Then name it in the memo as a judgment call with both core EPS values.
+- **Short history** (recent IPO, spin-off, new disclosure line): use every year available (minimum the last 8 quarters, annualized), state the window in `recurrence.assessment`, and prefer the higher of (window average) and (peer cost as % of revenue) for costs — a short window understates lumpy items. Pull older years from older 10-Ks and the S-1/Form 10 for pre-IPO history.
 
 **Tax effect:**
 - Deductible items: use the jurisdiction's marginal rate (US federal 21% + state ≈ 23-25%, or the company's effective marginal rate if disclosed).
@@ -204,7 +207,8 @@ When the company does report non-GAAP, rebuild it rather than accepting it:
 - Check that gains are excluded, not just losses.
 - Compare the gap: (non-GAAP NI − GAAP NI) / GAAP NI. Gap > 50% → investigate deeply; persistent large gap → earnings quality flag.
 - Check whether the definition changed this year (new exclusions appearing right when results weaken is a classic flag).
-- Check that guidance and consensus are on the same basis as your Core EPS before calling a beat/miss.
+- **One-off gains left inside adjusted EPS** (refunds, recoveries, reserve releases, asset-sale gains booked in opex): companies exclude one-off charges far more often than one-off gains. Remove them from your core figure and say how much of "adjusted" EPS they make up.
+- **Restate guidance and consensus to the core basis** before calling a beat/miss or using them in the variant view: subtract the one-offs they include (read the guidance footnote — does guided EPS include the refund?), and deduct the recurring costs they exclude that you keep (SBC, recurring restructuring). Show "reported basis → core basis" for the next two years.
 
 ---
 

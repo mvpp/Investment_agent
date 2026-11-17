@@ -24,7 +24,8 @@ Input schema (see ../examples/core_eps_input.json):
   "adjustments": [
     {"event_id":"2026Q3-legal-AG", "item":..., "class":"R1", "category":"litigation",
      "level":"operating"|"non_operating", "pretax": 9890, "normal_pretax": 875,
-     "tax_basis":"not_deductible", "tax_rate": 0.0,          # or "tax_effect": <incremental tax expense>
+     "tax_basis":"not_deductible", "tax_rate": 0.0,          # or "tax_effect" / "gross_tax_effect" (below)
+     "alt_normal_pretax": 2500, "alt_label": "5-yr average", # optional second run-rate → sensitivity table
      "recurrence": {"quarters_reviewed": 12, "similar_events": 5, "assessment": "lumpy-recurring"},
      "source":"10-Q Q3-26, Note 8"},
     {"event_id":"2026Q1-tax-CAMT", "item":..., "class":"TAX", "after_tax": -8030, "source":...},
@@ -45,6 +46,14 @@ holiday or an accrued-but-unpaid settlement whose run-rate cash cost must be cha
 the amount is negative. Revenue `amount` is what you add to reported revenue.
 `tax_effect` = incremental income-tax EXPENSE caused by the adjustment (adding back a
 deductible 100 charge at 21% -> +21; removing a taxable 100 gain -> -21).
+For R1/R3 the adjustment is the NET amount (pretax − normal_pretax) and tax applies to that
+net amount. tax_rate is applied to the net; tax_effect is taken as the tax on the net. When the
+filing discloses the tax on the GROSS charge, give it as `gross_tax_effect` (tax benefit the
+filing reports for the whole charge, positive): the script applies its rate (gross_tax_effect ÷
+pretax) to the net adjustment.
+`alt_normal_pretax` (R1/R3): a second defensible run-rate (e.g. the forward run-rate vs the
+5-yr average — adjustment-catalog §10). The bridge uses normal_pretax; the output adds core EPS
+under each alternative and under all alternatives together.
 
 Classes:
   R0  true one-off              -> remove fully
@@ -123,10 +132,15 @@ def tax_for(a, base, name, errors, warnings):
         return 0.0
     if "tax_effect" in a:
         tax = float(a["tax_effect"])
+    elif "gross_tax_effect" in a:
+        if not a.get("pretax"):
+            errors.append(f"'{name}': gross_tax_effect needs the gross pretax charge.")
+            return 0.0
+        tax = base * float(a["gross_tax_effect"]) / float(a["pretax"])
     elif "tax_rate" in a:
         tax = base * float(a["tax_rate"])
     else:
-        errors.append(f"'{name}': give tax_rate or tax_effect explicitly.")
+        errors.append(f"'{name}': give tax_rate, tax_effect or gross_tax_effect explicitly.")
         return 0.0
     if basis in ("not_deductible", "no_tax_effect") and abs(tax) > 1e-9:
         errors.append(f"'{name}': tax_basis {basis} must carry zero tax.")
@@ -185,6 +199,7 @@ def run(cfg):
     op_adj = nonop_adj = tax_on_adj = tax_items = 0.0
     increase = decrease = 0
     invest_after = 0.0  # after-tax losses of discretionary investment segments (SOTP aid only)
+    alts = []  # (name, label, after-tax change to core earnings if the alternative run-rate is used)
     seen_ids = set()
 
     for a in cfg.get("adjustments", []):
@@ -245,6 +260,10 @@ def run(cfg):
             adj = pre
         tax = tax_for(a, adj, name, errors, warnings)
         after = adj - tax
+        if "alt_normal_pretax" in a and cls in ("R1", "R3"):
+            d = a.get("normal_pretax", 0.0) - a["alt_normal_pretax"]  # alt adjustment − base adjustment
+            rate = tax / adj if adj else float(a.get("tax_rate", 0.0))
+            alts.append((name, a.get("alt_label", "alternative run-rate"), d * (1 - rate)))
         if a.get("level", "operating") == "operating":
             op_adj += adj
         else:
@@ -294,7 +313,12 @@ def run(cfg):
                  "op_margin": core_op / core_rev, "shares": core_shares},
         "core_ex_investment_eps": (core_ni + invest_after) / core_shares if invest_after else None,
         "lines": lines, "errors": [], "warnings": warnings, "revenue_adjustments": cfg.get("revenue_adjustments", []),
+        "alternatives": [{"item": n, "label": lb, "core_eps": (core_ni + d) / core_shares} for n, lb, d in alts]
+                        + ([{"item": "all alternatives together", "label": "", "core_eps": (core_ni + sum(d for *_, d in alts)) / core_shares}] if len(alts) > 1 else []),
     }
+    for x in res["alternatives"]:
+        if abs(x["core_eps"] - core_eps) > 0.05 * abs(core_eps):
+            warnings.append(f"Run-rate choice for '{x['item']}' moves core EPS by more than 5% ({core_eps:.2f} → {x['core_eps']:.2f}) — show both in the memo as a judgment call.")
 
     c = cfg.get("cash")
     if c:
@@ -312,6 +336,9 @@ def run(cfg):
             cash["owner_earnings"] = oe
             cash["owner_earnings_per_share"] = oe / core_shares
             cash["growth_capex"] = c["capex"] - c["maintenance_capex"]
+            if c["capex"] > 2 * c["maintenance_capex"] and oe - (core_fcf - sbc) > 0.5 * abs(oe):
+                warnings.append(f"Growth capex is {pct(cash['growth_capex'] / c['capex'])} of capex, so owner earnings ({oe / core_shares:,.2f}/sh) far exceed FCF after SBC "
+                                f"({(core_fcf - sbc) / core_shares:,.2f}/sh). Owner earnings assume the growth capex earns at least its cost of capital — show both and say why that holds.")
         conv = cash["conversion"]
         if conv is not None and conv < 0.5:
             warnings.append(f"FCF-after-SBC / core earnings is {pct(conv)} (<50%) — explain it in the memo (capex cycle, working capital, cash taxes) or treat earnings quality as low.")
@@ -349,6 +376,9 @@ def render(r):
         out.append(f"| Core EPS ex investment segments (SOTP input only — not a headline number) | | {num(r['core_ex_investment_eps'], 2)} |")
     if r["revenue_adjustments"]:
         out += ["", "Revenue adjustments: " + "; ".join(f"{x['item']} {num(x['amount'])} [{x.get('source', '')}]" for x in r["revenue_adjustments"])]
+    if r.get("alternatives"):
+        out += ["", "| Run-rate sensitivity | Core EPS |", "|---|---|", f"| Bridge as above | {num(cc['eps'], 2)} |"]
+        out += [f"| {x['item']}{' — ' + x['label'] if x['label'] else ''} | {num(x['core_eps'], 2)} |" for x in r["alternatives"]]
     if "cash" in r:
         c = r["cash"]
         out += ["", "| Cash metric | Value |", "|---|---|"]

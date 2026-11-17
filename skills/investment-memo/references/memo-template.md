@@ -77,7 +77,7 @@ Method: <primary + why it fits this business model>. Reverse DCF: price implies 
 | Driver / KPI | Value | Disclosed or (E) · confidence | Source |
 |---|---|---|---|
 
-<Sensitivity: 5×5 grid (WACC × g, or the two KPIs that matter most).>
+<Sensitivity: 5×5 grid (WACC × g, or the two KPIs that matter most), plus the calculator's WACC swing line (value at −1pt / base / +1pt) and the beta used with its industry weights.>
 
 Cross-checks: implied <multiple> vs peers <x> and 5-yr range <x–y>; SOTP $X; <structural check>. Methods agree within <x%> / differ because <…>.
 

@@ -43,13 +43,28 @@ Core rule: **value is forward FCF and its certainty.** An EV/S of 40 can be chea
 ## 2. Discount rate
 
 - Risk-free: current 10-year Treasury yield. Sources in order: FRED series DGS10 (`https://fred.stlouisfed.org/series/DGS10`, fetchable), Treasury.gov daily par yield curve, then a market-data page. Record the date.
-- Equity risk premium: Damodaran's implied ERP, updated monthly (`https://pages.stern.nyu.edu/~adamodar/` → "Implied ERP"). If unreachable, use the last value you can confirm and date it; if none, use 4.5% and say "ERP assumed".
-- Beta: bottom-up **industry unlevered beta** from Damodaran's "Betas by Sector (US)" dataset, relevered at the company's market D/E: βL = βU × (1 + (1 − t) × D/E). If the dataset is unreachable, use the sector's typical unlevered beta (utilities ~0.4, staples ~0.6, healthcare services ~0.8, industrials ~0.9, software ~1.1, semis ~1.3) and label it assumed. Avoid noisy single-stock regressions.
+- Equity risk premium: Damodaran's implied ERP. The current month's figure is on his home page (`https://pages.stern.nyu.edu/~adamodar/New_Home_Page/home.htm`, "Implied ERP on <date>"; the bare `~adamodar/` URL can return an empty page); year-end values are in `New_Home_Page/datafile/histimpl.html` — the **last** row is the latest year. (`implpr.html` is a stale copy that ends in 2016; don't use it.) If unreachable, use the last value you can confirm and date it; if none, use 4.5% and say "ERP assumed". His ERP is solved at that date's Treasury yield; if the yield has since moved by more than ~0.5pt, hold the implied expected market return constant: ERP = (his rf + his ERP) − today's rf.
+- Beta: bottom-up **industry unlevered beta** (corrected for cash) from Damodaran's "Betas by Sector (US)" — read the HTML table at `https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/Betas.html` (the .xls link is hard to parse; the table is updated each January and is current for the year) — relevered at the company's market D/E: βL = βU × (1 + (1 − t) × D/E).
+  - **Pick industries by where the money is made, weighted by the revenue (or operating income) mix** — not by how the company describes itself and not an equal blend. A company earning ~98% of revenue from advertising takes the Advertising beta, even if it is also an internet/software company; a conglomerate takes the segment-weighted average.
+  - Cross-check against the stock's own 2-year weekly or 5-year monthly regression beta (a finance site's "beta"). If the two differ by more than ~0.3, say which you used and why; don't average them silently.
+  - If the defensible betas give different ratings (one says Buy, the other Avoid), report both values in the memo and lower conviction — the decision then rests on a judgment input, not the business.
+  - If the page is unreachable, use these January-2026 values and label them "Damodaran Jan-26, not refreshed":
+
+  | Sector | βU | Sector | βU |
+  |---|---|---|---|
+  | Utility (general) | 0.15 | Homebuilding | 0.85 |
+  | Food processing | 0.47 | Machinery | 0.89 |
+  | Hospitals / facilities | 0.56 | Total market ex-financials | 0.90 |
+  | Healthcare support services | 0.74 | Shoe | 1.00 |
+  | Household products | 0.74 | Retail (special lines) | 1.00 |
+  | Retail (general) | 0.78 | Software | 1.25 |
+  | Restaurant / dining | 0.78 | Auto & truck | 1.31 |
+  | Apparel | 0.79 | Semiconductor | 1.50 |
+
 - No size premium by default (the evidence is weak and it double-counts risks you should model in scenarios); if you add one, show the value with and without it.
-- Cost of debt: current yield on the company's bonds/loans (floating: forward SOFR + spread), after tax.
-- Cost of debt: rating-implied yield or current bond YTM, after tax.
+- Cost of debt (pre-tax): the yield to maturity on the company's traded bonds; for floating-rate loans, forward SOFR + the loan spread; with neither, a rating-implied yield (or the interest-coverage synthetic rating). Then × (1 − marginal tax rate). Use market weights for D/V, with debt including leases, the revolver and any debt-like items in the EV bridge (§8).
 - Sanity ranges are **spreads over the current 10-yr yield**, not fixed levels (rates move): regulated utilities rf + 2–3%; large-cap staples rf + 3–4%; mega-cap tech rf + 4.5–6%; high-growth/unprofitable tech rf + 6–9%; clinical biotech rf + 7–11% (risk mostly in PoS, not the rate — don't double count). With rf ≈ 4%, mega-cap tech lands at 8.5–10%; with rf ≈ 5%, 9.5–11%.
-- Always show ±1% WACC sensitivity. A conclusion that flips inside ±1% is a low-conviction conclusion.
+- Always show ±1% WACC sensitivity — `valuation.py dcf` prints a "WACC swing" line; put it in the memo's valuation section. A conclusion that flips inside ±1% is a low-conviction conclusion.
 
 ---
 
@@ -62,7 +77,7 @@ Core rule: **value is forward FCF and its certainty.** An EV/S of 40 can be chea
 - **SBC: count it once.** Either treat SBC as a cash expense in FCF (use GAAP EBIT, which includes it) and use today's diluted shares, OR exclude it from costs and project the share count growth. Never exclude it from costs *and* use today's share count.
 - Use **core** earnings/FCF from the earnings-normalization skill as the base year, never a distorted GAAP year.
 - Working capital sign: sales-to-capital mode treats any revenue decline as capital released (cash in) — right for inventory/receivable-heavy businesses, wrong for **advance-funded** ones, where a decline unwinds customer prepayments and consumes cash. For those use capex mode with a negative `nwc_pct` (ΔNWC/Δrevenue from the last cycle).
-- Capex booms: model the depreciation wave. Future D&A ≈ Σ recent capex / useful life (servers 5–6 yrs, buildings 20–30+). EBIT margins that ignore a coming D&A step-up are overstated.
+- Capex booms: model the depreciation wave. Future D&A ≈ Σ recent capex / useful life. Split capex by asset type when lives differ (`asset_classes`: servers 5–6 yrs, network gear ~10, buildings 20–30+; the PP&E note gives the mix) and add `in_service_lag` when construction in progress is large (assets don't depreciate until placed in service; CIP ÷ annual capex ≈ the lag in years). EBIT margins that ignore a coming D&A step-up are overstated. The calculator's terminal value uses steady-state D&A, so a 10-year horizon no longer bakes boom-vintage depreciation into perpetuity; it prints both margins.
 
 ---
 
@@ -106,6 +121,8 @@ Use when segments differ in growth, margins, capital intensity or risk (ads + cl
 - **Expected IRR** = (prob-weighted value / price)^(1/years) − 1 + dividend yield. Hurdle: long ≥ 15% expected IRR; short ≥ 20–25%.
 - **Action price** = the lower of (fair value today × (1 − margin of safety)) and (the max price that still earns the hurdle). This one number goes in the memo header.
 - **Margin of safety — one rule.** Start from the quality grade (research-playbook §4 scorecard): **A 15% · B 25% · C 35% · D no position**. Add **+10 points** if the business is cyclical, policy-binary (a regulator or government payer sets price) or levered above ~3.5x net debt/EBITDA; add another +10 if two or more apply. Cap at 50%. State the arithmetic in the memo ("C 35% + policy-binary 10 = 45%").
+  - **Cyclical** = revenue fell ≥15% or operating margin fell by a third or more peak-to-trough in any downturn in the company's last 15 years (the sector's, if the company is younger) — or the business is in a sector where that is the norm: energy and materials, capital goods, autos, semis, airlines, homebuilders, discretionary durables, apparel and footwear brands, ad-funded media. Check the company's own history; don't add it because "the consumer is weak".
+  - **Policy-binary** = a regulator or government payer sets the price or decides whether the product can be sold (Medicaid/Medicare rates, utility rate cases, drug approvals, licences). A cost-side policy such as tariffs is not policy-binary: model it in the scenarios.
 - Skew = (bull − price)/(price − bear). Prefer ≥ 2:1. Size the position for the bear case, not the expected value.
 - `valuation.py scenarios` computes all of the above.
 
@@ -115,7 +132,13 @@ Use when segments differ in growth, margins, capital intensity or risk (ads + cl
 
 Equity = EV + cash & marketable securities + non-operating investments − debt − finance & (for lease-adjusted multiples) operating lease liabilities − minority interests − pension/OPEB deficits − non-convertible preferred − other debt-like items (accrued legal settlements payable, deferred consideration, factoring, residual-value guarantees likely to be called) ± tax assets (if not in FCF).
 - **Customer advances / contract liabilities** (project businesses, defense, equipment makers, software with annual prepay): cash on the balance sheet that customers prepaid is not fully the shareholders'. Normal float = contract liabilities ÷ revenue at a mid-cycle level × the revenue you expect to sustain; **excess** float = current contract liabilities − normal float. Deduct the excess as `excess_customer_advances` in the bridge (it unwinds as orders normalize), **or** model the unwind in FCFF with capex mode and a negative `nwc_pct` — never both. Net it against contract assets/unbilled receivables when billing runs ahead the other way.
-- Use **post-period** balances: debt raised, equity issued and settlements agreed after the quarter end (8-Ks) belong in the bridge. Mandatory convertible preferred → shares, not a deduction.
+- Use **post-period** balances: debt raised, equity issued and settlements agreed after the quarter end (8-Ks and prospectuses — 424B5 shows final sizes and over-allotment exercise) belong in the bridge. Enter each as a `capital_actions` row in the dcf/sotp input (shares, cash, claims, source) instead of editing net cash by hand:
+  - **Forward equity sale:** add the shares and the settlement cash (shares × forward price, net of fees). If settlement is optional, assume physical settlement.
+  - **Mandatory convertible preferred:** add the shares at the conversion rate implied by today's price (between the min and max rates), add the net proceeds as cash, and deduct the PV of the preferred dividends until conversion as a claim. Don't also deduct the preferred as debt.
+  - **New debt:** cash in and the same amount as a claim (net zero) unless the proceeds have a stated use.
+- **Commitments that aren't yet liabilities:** leases signed but not commenced and purchase commitments are future capex/opex — make sure the DCF's capex and margin paths include them; don't deduct them again. **Residual-value guarantees** (e.g. on leased data centers) are contingent claims: deduct probability × expected shortfall, and show the full amount as a risk.
+- **Unaccrued legal penalties and pending judgments:** deduct the expected value (probability × amount × (1 − tax rate if deductible; fines usually aren't)) as a claim; put the full amount in the bear case. Accrued amounts are already on the balance sheet — don't double count.
+- **Pending split or stock dividend** (announced, not yet effective): value on the pre-split share count; set `split_factor` so the calculators print post-split values, and show both in the memo header until the effective date.
 - Be consistent: if EBITDA is pre-lease-expense (IFRS 16 style / EBITDAR), subtract lease liabilities; if lease cost is in EBIT, don't.
 - Shares: fully diluted (treasury method for options/RSUs; if-converted for in-the-money converts).
 

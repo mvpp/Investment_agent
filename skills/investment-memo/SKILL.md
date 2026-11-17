@@ -19,9 +19,8 @@ Paths to scripts and references below are relative to this skill's directory (si
 Confirm (ask only what you can't infer): ticker; purpose — **new idea**, **existing position review**, or **post-earnings update** (→ Update mode below); horizon (default 3 years for both the target price and the IRR — one horizon keeps the numbers consistent); any portfolio rules (position sizing, hurdle rate). Match the user's language for the memo (Chinese request → Chinese memo; keep tickers, metrics and accounting terms in English where natural), unless the user or system prompt specifies an output language.
 
 Get fresh data first: latest price, market cap, the most recent 10-K/10-Q, last call transcript, consensus estimates. Training-data knowledge is a starting hypothesis, never a source — later filings exist.
-- `python3 ../earnings-normalization/scripts/sec_facts.py <TICKER or --cik N>` — 5-year / 8-quarter / TTM base, ETR flags.
-- `python3 ../earnings-normalization/scripts/filings.py list <TICKER> --since <last period end>` — **every 8-K filed after the latest quarter end.** Financings, share issuance (forward sales, mandatory converts, ATMs), splits/stock dividends, settlements and M&A after the period change the share count, net debt and thesis; they never show up in the quarter's XBRL. Read them with `filings.py text <url> --grep ...`.
-(Set `SEC_USER_AGENT="Name email"` — SEC's archive and ticker lookup reject anonymous agents.)
+- Read the filings yourself and build the data sheet per `../earnings-normalization/references/reading-filings.md` (5 years / 8 quarters / TTM, every number verbatim with its URL). Scripts in this bundle only calculate; they don't fetch.
+- **Every 8-K filed after the latest quarter end.** Financings, share issuance (forward sales, mandatory converts, ATMs), splits/stock dividends, settlements and M&A after the period change the share count, net debt and thesis; they never show up in the quarter's statements.
 - If the latest results exist only as an 8-K release (10-Q/10-K pending), use the release as the latest period and follow the earnings-normalization "release out, filing pending" steps. If the price you have predates the release (e.g. after-hours print), say so in the header and, if you can get it, show both pre- and post-release prices.
 
 ## Workflow
@@ -36,7 +35,7 @@ Read `references/research-playbook.md` for the detail behind each pass (evidence
 6. **Expectations** (§6) — consensus vs market-implied vs ours → the variant view sentence. No variant view → lower conviction; say so.
 7. **Red team** (§7) — hidden risks, devil's advocate, six-lens check, pre-mortem, thesis check, bias check. Then **revise** probabilities, target or rating if any of it lands. A red team that never changes anything is theater.
 8. **Decide** (§8) — rating, conviction, sizing guidance, 2–4 kill conditions (for an Avoid on a new idea: entry conditions + the kill conditions that would apply once bought), monitoring KPIs, catalysts, add/trim/exit triggers.
-9. **Write and compress** — fill `references/memo-template.md`, apply its compression rules, then run `python3 scripts/memo_check.py memo.md` and cut until it passes (≤5 pages, required sections present, numeric kill conditions, no filler).
+9. **Write and compress** — fill `references/memo-template.md`, apply its compression rules, then run `python3 scripts/memo_check.py memo.md --calc scenarios_out.json` (the `valuation.py scenarios ... --json` output) and fix until it passes (≤5 pages, required sections present, numeric kill conditions, no filler, header target / fair value / action price equal to the calculator's).
 
 Steps 4 and 5 are where the value is. Don't let the qualitative passes crowd them out.
 

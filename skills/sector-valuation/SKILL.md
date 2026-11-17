@@ -39,12 +39,12 @@ Start from **core** revenue/EBIT/EPS/FCF from the earnings-normalization skill, 
 
 | Command | Use for |
 |---|---|
-| `python3 scripts/valuation.py dcf in.json` | FCFF DCF with growth/margin fade; reinvestment by **capex/D&A vintages** (`capex_pct` + `ebitda_margin` + `asset_life` — use this for capex booms: it produces the depreciation wave; `examples/dcf_capex.json`), sales-to-capital (scalar or path), or a reinvestment-rate path; value-consistent terminal value; 5×5 WACC × terminal-g **and** WACC × terminal-margin sensitivity grids (`margin_step`, default 2pts; `"margin_grid": false` to skip); `excess_customer_advances` for advance-funded businesses; warnings |
-| `... reverse in.json` | Market-implied revenue CAGR (`"solve": "growth"`; use capex or sales-to-capital mode so growth isn't free) or terminal margin (`"solve": "margin"`; shifts your margin path, keeping its shape) |
+| `python3 scripts/valuation.py dcf in.json` | FCFF DCF with growth/margin fade; reinvestment by **capex/D&A vintages** (`capex_pct` + `ebitda_margin` + `asset_life` or `asset_classes`, optional `in_service_lag` — use this for capex booms: it produces the depreciation wave, and the terminal value uses steady-state D&A; `examples/dcf_capex.json`), sales-to-capital (scalar or path), or a reinvestment-rate path; value-consistent terminal value; 5×5 WACC × terminal-g **and** WACC × terminal-margin sensitivity grids (`margin_step`, default 2pts; `"margin_grid": false` to skip); `excess_customer_advances` for advance-funded businesses; `capital_actions` for post-period share/cash/claim changes and `split_factor` for pending splits (also in sotp/scenarios); NOPAT/share path for the consensus cross-check; WACC ±1pt swing line; warnings |
+| `... reverse in.json` | Market-implied growth (`"solve": "growth"`: scales your growth path, keeping its shape, and reports the implied CAGR vs yours — `"growth_mode": "constant"` for one flat rate; use capex or sales-to-capital mode so growth isn't free) or terminal margin (`"solve": "margin"`; shifts your margin path, keeping its shape) |
 | `... sotp in.json` | Segment value × multiple or explicit/option value, holdco discount, per-share bridge |
 | `... rnpv in.json` | Drug pipeline rNPV with phase PoS defaults, launch ramp, LOE erosion, dilution |
 | `... ltv in.json` | SaaS/subscription LTV, LTV/CAC, payback, implied NRR |
-| `... scenarios in.json` | Per-scenario `value_today` (DCF) rolled to the horizon at cost of equity → target, expected IRR vs 15% hurdle, skew on today's values, and the header action price |
+| `... scenarios in.json` | Per-scenario `value_today` — or `"dcf": "dcf_bear.json"` to compute it from that scenario's DCF input, so a revised DCF flows through — rolled to the horizon at cost of equity → target, expected IRR vs 15% hurdle, skew on today's values, and the header action price. Save `--json` output for `memo_check.py --calc` |
 
 For NAV-style models (E&P, mining, REITs), compute component values (PV-10 adjusted to your deck, risked inventory, cap-rate NAV) and sum them with `sotp`.
 

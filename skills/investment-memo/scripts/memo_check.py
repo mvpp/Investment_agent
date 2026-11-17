@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Lint an investment memo for length, required sections and convergence.
 
-Usage: python3 memo_check.py memo.md [--max-pages 5]
+Usage: python3 memo_check.py memo.md [--max-pages 5] [--calc scenarios.json]
+
+--calc takes the JSON from `valuation.py scenarios <input> --json`; the header must then show
+the same target, fair value today and action price (±1%).
 
 Page estimate: ~450 English words per dense memo page (tables included); one
 English word ~= 1.8 CJK characters. Exit code 1 if any hard check fails.
 """
+import json
 import re
 import sys
 
@@ -61,6 +65,24 @@ def kill_items(text):
     return items
 
 
+SPLIT_RX = r"stock split|stock dividend|\d+[-‑ ]for[-‑ ]\d+|拆股|送股|分拆"
+POST_RX = r"post[- ]split|after the split|split[- ]adjusted|拆股后|送股后|拆分后"
+
+
+def header_numbers(head):
+    return [float(x.replace(",", "")) for x in re.findall(r"\$?(\d[\d,]*\.?\d*)", head)]
+
+
+def tie_check(head, calc, fails):
+    nums = header_numbers(head)
+    for label, key in (("target", "expected_value"), ("fair value today", "fair_value_today"), ("action price", "action_price")):
+        v = calc.get(key)
+        if not v:
+            continue
+        if not any(abs(n - v) <= 0.01 * abs(v) + 0.5 for n in nums):
+            fails.append(f"Header {label} does not match the scenarios output ({v:,.2f}) — update the header or re-run the calculator.")
+
+
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
@@ -97,6 +119,11 @@ def main():
     for label, rx in (("rating", r"rating|评级"), ("target price", r"target|目标价"), ("action price", r"action price|行动价|买入价|建仓价"), ("as-of date", r"as of|截至|\d{4}-\d{2}-\d{2}")):
         if not re.search(rx, head):
             fails.append(f"Header (first lines) lacks {label}.")
+
+    if "--calc" in sys.argv:
+        tie_check("\n".join(text.strip().splitlines()[:6]), json.load(open(sys.argv[sys.argv.index("--calc") + 1])), fails)
+    if re.search(SPLIT_RX, lower) and re.search(r"pending|effective|announced|将于|生效", lower) and not re.search(POST_RX, head):
+        warns.append("A split or stock dividend is mentioned but the header has no post-split values — show pre- and post-split target and action price until it is effective.")
 
     if not re.search(r"as of|截至|数据日期|\d{4}-\d{2}-\d{2}", lower):
         warns.append("No 'as of' date found — prices and estimates go stale.")

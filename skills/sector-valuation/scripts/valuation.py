@@ -5,8 +5,8 @@ Subcommands (each takes a JSON file; see ../examples/*.json):
   dcf        FCFF DCF with growth/margin fade; reinvestment via capex/D&A vintages (models
              the depreciation wave of a capex boom), sales-to-capital (scalar or path) or a
              reinvestment-rate path; value-consistent terminal value (g / RONIC); 5x5 sensitivity.
-  reverse    Reverse DCF: solve the constant revenue CAGR (or terminal margin) the
-             current price implies, holding the rest of the dcf inputs fixed.
+  reverse    Reverse DCF: solve the revenue growth (whole path scaled, shape kept) or the
+             terminal margin the current price implies, holding the rest of the dcf inputs fixed.
   sotp       Sum-of-the-parts: segment metric x multiple (or explicit value), bridge to per share.
   scenarios  Bear/base/bull probability-weighted value, expected IRR, upside/downside skew,
              hurdle-based buy price and margin-of-safety action price.
@@ -15,8 +15,15 @@ Subcommands (each takes a JSON file; see ../examples/*.json):
 
 Usage: python3 valuation.py <subcommand> input.json [--json]
 All money inputs in one consistent unit (e.g. USD M); shares in the same scale (M).
+
+Bridge inputs shared by dcf and sotp: net_cash (negative = net debt), investments, other_claims,
+excess_customer_advances, and capital_actions — post-period events not yet in the balance sheet:
+  [{"item": "Forward sale, 46M sh", "shares": 46, "cash": 28700, "claims": 0, "source": "8-K 10-29"}]
+  shares/cash added; claims (debt raised, PV of preferred dividends, expected legal penalties) deducted.
+split_factor (e.g. 2 for a pending 2-for-1) prints post-split per-share values next to pre-split ones.
 """
 import json
+import os
 import sys
 
 
@@ -48,21 +55,60 @@ def shift_to_end(m, x):
     return [mt + (x - m[-1]) * (t + 1) / n for t, mt in enumerate(m)]
 
 
-def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None):
+def asset_classes(c):
+    """[(share of capex, life)] — `asset_classes` [{"share", "life"}] or a single `asset_life`."""
+    if c.get("asset_classes"):
+        cls = [(a["share"], a["life"]) for a in c["asset_classes"]]
+        if abs(sum(sh for sh, _ in cls) - 1) > 1e-6:
+            sys.exit("asset_classes shares must sum to 1")
+        return cls
+    return [(1.0, c["asset_life"])]
+
+
+def da_from(hist, cls, lag):
+    """Straight-line D&A for the latest year of `hist` (capex by year, oldest first); capex starts
+    depreciating `lag` years after it is spent (construction in progress)."""
+    end = len(hist) - lag
+    return sum(sh * sum(hist[max(0, end - life):end]) / life for sh, life in cls)
+
+
+def steady_da_ratio(cls, lag, g):
+    """D&A / same-year capex when capex grows at g forever."""
+    return sum(sh * sum((1 + g) ** -k for k in range(lag, lag + life)) / life for sh, life in cls)
+
+
+def bridge(c, ev):
+    acts = c.get("capital_actions") or []
+    equity = (ev + c.get("net_cash", 0.0) + c.get("investments", 0.0) - c.get("other_claims", 0.0)
+              - c.get("excess_customer_advances", 0.0)
+              + sum(a.get("cash", 0.0) for a in acts) - sum(a.get("claims", 0.0) for a in acts))
+    shares = c["diluted_shares"] + sum(a.get("shares", 0.0) for a in acts)
+    return equity, shares
+
+
+def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.0, growth_shift=0.0):
     """Reinvestment modes (pick one):
-      capex mode     : capex_pct (path) + ebitda_margin (path) + asset_life [+ capex_history, nwc_pct].
+      capex mode     : capex_pct (path) + ebitda_margin (path) + asset_life or asset_classes
+                       [+ capex_history, in_service_lag, nwc_pct].
                        D&A is built from the capex vintage (straight-line), so a capex boom produces
                        the depreciation wave in EBIT; reinvestment = capex − D&A + nwc_pct × Δrevenue.
+                       asset_classes: [{"share": 0.6, "life": 5}, {"share": 0.4, "life": 25}] splits each
+                       year's capex between asset types (servers vs buildings). in_service_lag: years
+                       before capex starts depreciating (large construction in progress; default 0).
                        nwc_pct = ΔNWC / Δrevenue: positive = growth ties up working capital; NEGATIVE
                        for advance-funded businesses (customer prepayments), where growth releases cash
-                       and a revenue decline consumes it. capex_history lists the years before year 1,
-                       oldest first; if shorter than asset_life it is padded with its first value
-                       (give asset_life years of history for an accurate opening D&A).
+                       and a revenue decline consumes it. capex_history lists the fiscal years BEFORE
+                       year 1, oldest first, ending with the base period (if revenue0 is TTM, end with
+                       TTM capex and drop the fiscal year it overlaps); padded with its first value if
+                       shorter than the longest life + lag.
+                       Terminal value uses steady-state D&A (capex growing at g with the final capex_pct),
+                       not the final year's D&A, which still carries boom vintages (terminal_da:
+                       "final_year" restores the old behaviour).
       sales_to_capital (scalar or path): reinvestment = Δrevenue / S2C.
       reinvestment_rate (path): reinvestment = NOPAT × rate (growth is then 'free' — avoid for reverse growth).
     """
     n = c["years"]
-    gr = path(growth if growth is not None else c["growth"], n, "growth")
+    gr = [x * growth_scale + growth_shift for x in path(growth if growth is not None else c["growth"], n, "growth")]
     capex_mode = "capex_pct" in c
     mkey = "ebitda_margin" if capex_mode else "ebit_margin"
     m = path(c[mkey], n, mkey)
@@ -76,9 +122,10 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None):
     mid = c.get("mid_year", True)
     if capex_mode:
         cx = path(c["capex_pct"], n, "capex_pct")
-        life = c["asset_life"]
+        cls = asset_classes(c)
+        lag = c.get("in_service_lag", 0)
         hist = list(c.get("capex_history") or [c["revenue0"] * cx[0]])
-        hist = [hist[0]] * max(0, life - len(hist)) + hist
+        hist = [hist[0]] * max(0, max(l for _, l in cls) + lag - len(hist)) + hist
         nwc = c.get("nwc_pct", 0.0)
     elif c.get("sales_to_capital") is not None:
         s2c = path(c["sales_to_capital"], n, "sales_to_capital")
@@ -91,7 +138,7 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None):
         if capex_mode:
             capex = rev * cx[t]
             hist.append(capex)
-            da = sum(hist[-life:]) / life
+            da = da_from(hist, cls, lag)
             ebit = rev * m[t] - da
             reinv = capex - da + nwc * (rev - rev_prev)
             row.update({"ebitda_margin": m[t], "capex": capex, "da": da})
@@ -107,17 +154,22 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None):
         rows.append(row)
         rev_prev = rev
     ronic = c.get("terminal_roic", wacc)
-    term_margin = rows[-1]["margin"]
+    final_margin = term_margin = rows[-1]["margin"]
+    if capex_mode and c.get("terminal_da", "steady_state") == "steady_state":
+        term_margin = m[-1] - cx[-1] * steady_da_ratio(cls, lag, g)
     nopat_next = rows[-1]["revenue"] * (1 + g) * term_margin * (1 - tax[-1])
     fcff_next = nopat_next * (1 - g / ronic)
     tv = fcff_next / (wacc - g)
     pv_tv = tv / (1 + wacc) ** (n - 0.5 if mid else n)
     ev = pv_sum + pv_tv
-    equity = ev + c.get("net_cash", 0.0) + c.get("investments", 0.0) - c.get("other_claims", 0.0) - c.get("excess_customer_advances", 0.0)
-    per_share = equity / c["diluted_shares"]
+    equity, shares = bridge(c, ev)
+    per_share = equity / shares
+    for row in rows:
+        row["nopat_ps"] = row["nopat"] / shares
     return {"rows": rows, "excess_customer_advances": c.get("excess_customer_advances", 0.0), "pv_explicit": pv_sum, "tv": tv, "pv_tv": pv_tv, "ev": ev, "equity": equity, "per_share": per_share,
+            "shares": shares, "capital_actions": c.get("capital_actions") or [], "split_factor": c.get("split_factor"),
             "tv_share": pv_tv / ev if ev else None, "tv_ev_ebit": tv / (nopat_next / (1 - tax[-1])), "wacc": wacc, "g": g, "ronic": ronic,
-            "capex_mode": capex_mode, "terminal_ebit_margin": term_margin}
+            "capex_mode": capex_mode, "terminal_ebit_margin": term_margin, "final_year_ebit_margin": final_margin}
 
 
 def dcf(c):
@@ -129,15 +181,19 @@ def dcf(c):
     ws = [w + step_w * k for k in (-2, -1, 0, 1, 2)]
     gs = [g + step_g * k for k in (-2, -1, 0, 1, 2)]
     grid = [[(dcf_core(c, wacc=wi, g=gi) or {}).get("per_share") for gi in gs] for wi in ws]
+    r["wacc_swing"] = [(dcf_core(c, wacc=w + d) or {}).get("per_share") for d in (-0.01, 0.01)]
     warn = []
+    if r.get("capex_mode") and abs(r["terminal_ebit_margin"] - r["final_year_ebit_margin"]) > 0.01:
+        warn.append(f"Final-year EBIT margin {pct(r['final_year_ebit_margin'])} vs steady-state {pct(r['terminal_ebit_margin'])} used for the terminal value — "
+                    "D&A has not settled by the last explicit year (boom vintages still depreciating); the terminal value uses the steady state.")
     if g > 0.04:
         warn.append(f"Terminal growth {pct(g)} exceeds ~4% (long-run nominal GDP / risk-free) — justify or lower.")
     if r["tv_share"] > 0.80:
         warn.append(f"Terminal value is {pct(r['tv_share'])} of EV — value rests on the steady state; extend the explicit period or stress the terminal margin.")
     if r["ronic"] > 0.35:
         warn.append(f"Terminal RONIC {pct(r['ronic'])} assumes a very durable moat; most companies fade toward WACC + a few points.")
-    if r.get("capex_mode") and any(row["capex"] < 0.95 * row["da"] for row in r["rows"][-3:]):
-        warn.append("Capex runs below D&A in the final explicit years — negative net reinvestment flatters FCFF; steady-state capex should be ≥ D&A for a growing business.")
+    if r.get("capex_mode") and c.get("terminal_da") == "final_year" and any(row["capex"] < 0.95 * row["da"] for row in r["rows"][-3:]):
+        warn.append("Capex runs below D&A in the final explicit years and the terminal value uses that year's D&A — negative net reinvestment flatters the terminal FCFF; use terminal_da steady_state or extend the horizon.")
     if not r.get("capex_mode") and c.get("sales_to_capital") is not None and any(row["growth"] < 0 for row in r["rows"]):
         warn.append("Revenue declines while reinvestment is sales-to-capital: a decline is treated as capital RELEASED (cash in). For advance-funded businesses (customer prepayments) a decline CONSUMES cash — use capex mode with a negative nwc_pct, or deduct excess_customer_advances.")
     if any(row["fcff"] < 0 for row in r["rows"][-2:]):
@@ -156,24 +212,43 @@ def dcf(c):
     return r
 
 
+def action_lines(acts):
+    out = []
+    for a in acts:
+        parts = [f"shares {a['shares']:+,.1f}" if a.get("shares") else "", f"cash {a['cash']:+,.0f}" if a.get("cash") else "",
+                 f"claims −{a['claims']:,.0f}" if a.get("claims") else ""]
+        out.append(f"| Capital action: {a.get('item', '?')} ({', '.join(p for p in parts if p)}) [{a.get('source', '')}] | {money(a.get('cash', 0.0) - a.get('claims', 0.0))} |")
+    return out
+
+
 def render_dcf(r, unit=""):
     if r.get("capex_mode"):
-        o = ["## DCF (capex / D&A mode)", "", "| Yr | Revenue | Growth | EBITDA m | Capex | D&A | EBIT m | NOPAT | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        o = ["## DCF (capex / D&A mode)", "", "| Yr | Revenue | Growth | EBITDA m | Capex | D&A | EBIT m | NOPAT | NOPAT/sh | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for x in r["rows"]:
-            o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['ebitda_margin'])} | {money(x['capex'])} | {money(x['da'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+            o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['ebitda_margin'])} | {money(x['capex'])} | {money(x['da'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['nopat_ps'], 2)} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+        o.append(f"\nTerminal EBIT margin {pct(r['terminal_ebit_margin'])} (steady-state D&A) vs final explicit year {pct(r['final_year_ebit_margin'])}.")
     else:
-        o = ["## DCF", "", "| Yr | Revenue | Growth | EBIT margin | NOPAT | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|"]
+        o = ["## DCF", "", "| Yr | Revenue | Growth | EBIT margin | NOPAT | NOPAT/sh | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|---|"]
         for x in r["rows"]:
-            o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+            o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['nopat_ps'], 2)} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+    o.append("NOPAT/sh ≈ EPS before net interest and non-operating items, on the bridge share count — use it to compare with consensus EPS.")
     o += ["", "| Bridge | Value |", "|---|---|",
           f"| PV explicit FCFF | {money(r['pv_explicit'])} |",
           f"| PV terminal value ({pct(r['tv_share'])} of EV; implied exit {r['tv_ev_ebit']:.1f}x EBIT) | {money(r['pv_tv'])} |",
           f"| Enterprise value | {money(r['ev'])} |",
           *([f"| (−) Excess customer advances (debt-like float) | {money(r['excess_customer_advances'])} |"] if r.get("excess_customer_advances") else []),
+          *action_lines(r["capital_actions"]),
           f"| Equity value | {money(r['equity'])} |",
+          f"| Shares (incl. capital actions) | {money(r['shares'], 1)} |",
           f"| **Value per share** | **{money(r['per_share'], 2)}** |"]
+    if r.get("split_factor"):
+        o.append(f"| Value per share after {r['split_factor']:g}-for-1 split | {money(r['per_share'] / r['split_factor'], 2)} |")
     if r.get("price"):
         o.append(f"| Price / upside | {money(r['price'], 2)} / {pct(r['upside'])} |")
+    lo, hi = r["wacc_swing"]
+    if lo and hi:
+        o.append(f"\nWACC swing: {money(lo, 2)} at {pct(r['wacc'] - 0.01)} · {money(r['per_share'], 2)} at {pct(r['wacc'])} · {money(hi, 2)} at {pct(r['wacc'] + 0.01)} "
+                 f"(−1pt {pct(lo / r['per_share'] - 1)}, +1pt {pct(hi / r['per_share'] - 1)}). Put this line in the memo.")
     o += ["", f"Sensitivity — value/share (rows WACC, cols terminal g; centre = base, WACC {pct(r['wacc'])}, g {pct(r['g'])}, RONIC {pct(r['ronic'])}):", ""]
     o.append("| WACC \\ g | " + " | ".join(pct(g) for g in r["grid_g"]) + " |")
     o.append("|---" * (len(r["grid_g"]) + 1) + "|")
@@ -196,14 +271,23 @@ def render_dcf(r, unit=""):
 def reverse(c):
     price, target = c["price"], c.get("solve", "growth")
 
+    constant = c.get("growth_mode") == "constant"
+    # default: scale the whole growth path (keeps its fade toward terminal); shift it if it has negative years
+    scale = not constant and min(path(c["growth"], c["years"], "growth")) >= 0
+
     def val(x):
         if target == "growth":
-            r = dcf_core(c, growth=x)
+            r = dcf_core(c, growth=x) if constant else (dcf_core(c, growth_scale=x) if scale else dcf_core(c, growth_shift=x))
         else:
             r = dcf_core(c, margin_end=x)
         return r["per_share"] if r else None
 
-    lo, hi = (-0.30, 1.0) if target == "growth" else (-0.2, 0.9)
+    if target == "growth" and scale:
+        lo, hi = -1.0, 6.0
+    elif target == "growth" and not constant:
+        lo, hi = -0.9 - min(path(c["growth"], c["years"], "growth")), 1.0
+    else:
+        lo, hi = (-0.30, 1.0) if target == "growth" else (-0.2, 0.9)
     vlo, vhi = val(lo), val(hi)
     if vlo is None or vhi is None or (vlo - price) * (vhi - price) > 0:
         return {"solve": target, "solution": None, "note": f"No solution in [{lo}, {hi}] (value range {money(vlo, 2)}–{money(vhi, 2)} vs price {price}). Value may not be monotonic (incremental ROIC < WACC) — check sales_to_capital."}
@@ -216,7 +300,17 @@ def reverse(c):
     x = (lo + hi) / 2
     out = {"solve": target, "solution": x, "price": price, "warnings": []}
     if target == "growth":
-        out["implied_final_revenue"] = c["revenue0"] * (1 + x) ** c["years"]
+        n = c["years"]
+        base_path = path(c["growth"], n, "growth")
+        ipath = [x] * n if constant else ([v * x for v in base_path] if scale else [v + x for v in base_path])
+        fin = c["revenue0"]
+        for v in ipath:
+            fin *= 1 + v
+        bfin = c["revenue0"]
+        for v in base_path:
+            bfin *= 1 + v
+        out.update({"implied_final_revenue": fin, "implied_cagr": (fin / c["revenue0"]) ** (1 / n) - 1, "base_cagr": (bfin / c["revenue0"]) ** (1 / n) - 1,
+                    "adj": x, "mode": "constant" if constant else ("scale" if scale else "shift"), "path_first": ipath[0], "path_last": ipath[-1]})
         if "capex_pct" not in c and c.get("sales_to_capital") is None:
             out["warnings"].append("reinvestment_rate mode: extra growth needs no extra capital here, so the implied CAGR is biased LOW. Re-run with sales_to_capital or capex mode for the growth solve.")
     else:
@@ -230,8 +324,12 @@ def render_reverse(r):
     if r["solution"] is None:
         return "## Reverse DCF\n\n" + r["note"]
     if r["solve"] == "growth":
-        txt = (f"## Reverse DCF\n\nAt {money(r['price'], 2)}/share the market implies a **{pct(r['solution'])} revenue CAGR** "
-               f"(final-year revenue {money(r['implied_final_revenue'])}), holding the margin path, reinvestment, WACC and terminal assumptions fixed.")
+        how = {"constant": "constant growth every year",
+               "scale": f"your growth path scaled ×{r['adj']:.2f}, shape kept",
+               "shift": f"your growth path shifted {r['adj'] * 100:+.1f}pts every year"}[r["mode"]]
+        how += f": year 1 {pct(r['path_first'])}, final year {pct(r['path_last'])}" if r["mode"] != "constant" else ""
+        txt = (f"## Reverse DCF\n\nAt {money(r['price'], 2)}/share the market implies a **{pct(r['implied_cagr'])} revenue CAGR** over the explicit period "
+               f"vs {pct(r['base_cagr'])} in your base case ({how}; final-year revenue {money(r['implied_final_revenue'])}), holding the margin path, reinvestment, WACC and terminal assumptions fixed.")
     else:
         txt = (f"## Reverse DCF\n\nAt {money(r['price'], 2)}/share the market implies a **terminal EBIT margin of {pct(r['implied_terminal_ebit_margin'])}** "
                f"({r['mode']}), holding the growth path fixed.")
@@ -248,9 +346,10 @@ def sotp(c):
         total += v
     disc = c.get("holdco_discount", 0.0)
     ev = total * (1 - disc)
-    equity = ev + c.get("net_cash", 0.0) + c.get("investments", 0.0) - c.get("other_claims", 0.0)
-    ps = equity / c["diluted_shares"]
-    res = {"rows": rows, "gross": total, "holdco_discount": disc, "ev": ev, "equity": equity, "per_share": ps}
+    equity, shares = bridge(c, ev)
+    ps = equity / shares
+    res = {"rows": rows, "gross": total, "holdco_discount": disc, "ev": ev, "equity": equity, "per_share": ps,
+           "capital_actions": c.get("capital_actions") or [], "split_factor": c.get("split_factor")}
     if c.get("price"):
         res["price"], res["upside"] = c["price"], ps / c["price"] - 1
     return res
@@ -265,7 +364,12 @@ def render_sotp(r):
             basis += f" x p={s['probability']}"
         o.append(f"| {s['name']} | {basis} | {money(s['ev'])} | {money(s['ev'] / sh, 2)} | {pct(s['ev'] / r['gross'])} |")
     o += [f"| Holdco / conglomerate discount | {pct(r['holdco_discount'])} | | | |",
+          *[f"| Capital action: {a.get('item', '?')}" + (f" (+{a['shares']:,.1f} sh)" if a.get("shares") else "")
+            + f" | {a.get('source', '')} | {money(a.get('cash', 0.0) - a.get('claims', 0.0))} | {money((a.get('cash', 0.0) - a.get('claims', 0.0)) / sh, 2)} | |"
+            for a in r["capital_actions"]],
           f"| **Equity value / share** | | {money(r['equity'])} | **{money(r['per_share'], 2)}** | |"]
+    if r.get("split_factor"):
+        o.append(f"| Equity value / share after {r['split_factor']:g}-for-1 split | | | {money(r['per_share'] / r['split_factor'], 2)} | |")
     if r.get("price"):
         o.append(f"\nPrice {money(r['price'], 2)} → upside {pct(r['upside'])}")
     return "\n".join(o)
@@ -277,6 +381,13 @@ def scenarios(c):
     horizon). Missing one is derived by rolling at the cost of equity net of dividend yield:
     value = value_today x (1 + ke − dy)^years. Skew and the bear check use today's values."""
     sc = [dict(s) for s in c["scenarios"]]
+    for s in sc:  # "dcf": "dcf_bear.json" → value_today from that DCF input (path relative to this file)
+        if s.get("dcf"):
+            fp = os.path.join(c.get("_dir", "."), s["dcf"])
+            d = dcf_core(json.load(open(fp)))
+            if d is None:
+                sys.exit(f"{s['dcf']}: terminal_growth must be below wacc")
+            s["value_today"] = d["per_share"]
     p = sum(s["prob"] for s in sc)
     warn = [] if abs(p - 1) < 1e-6 else [f"Probabilities sum to {p:.2f}, not 1.00."]
     price, yrs = c["price"], c.get("years", 3.0)
@@ -314,7 +425,7 @@ def scenarios(c):
         warn.append("No value_today per scenario (or cost_of_equity): skew/bear use horizon values, which understate downside vs today's price.")
     return {"rows": sc, "expected_value": ev, "expected_return": ev / price - 1, "irr": irr, "skew": skew, "skew_note": skew_note, "skew_basis": basis, "years": yrs,
             "price": price, "buy_for_hurdle": buy_for_hurdle, "hurdle": hurdle, "fair_value_today": fv_today, "mos_price": mos_price,
-            "mos": mos, "action_price": action, "warnings": warn}
+            "mos": mos, "action_price": action, "warnings": warn, "split_factor": c.get("split_factor")}
 
 
 def render_scen(r):
@@ -329,6 +440,9 @@ def render_scen(r):
     if r["mos_price"]:
         o.append(f"- Fair value today x (1 − {pct(r['mos'], 0)} MOS): {money(r['mos_price'], 2)}")
     o.append(f"- **Action price for the memo header (lower of the two): {money(r['action_price'], 2)}**")
+    if r.get("split_factor"):
+        k = r["split_factor"]
+        o.append(f"- After the {k:g}-for-1 split: fair value {money((r['fair_value_today'] or 0) / k, 2)} · target {money(r['expected_value'] / k, 2)} · action price {money(r['action_price'] / k, 2)} — show both in the header until the split is effective.")
     if r["warnings"]:
         o += ["", "Warnings:"] + [f"- {w}" for w in r["warnings"]]
     return "\n".join(o)
@@ -442,7 +556,9 @@ def main():
     if len(sys.argv) < 3 or sys.argv[1] not in CMDS:
         sys.exit(__doc__)
     fn, rend = CMDS[sys.argv[1]]
-    res = fn(json.load(open(sys.argv[2])))
+    cfg = json.load(open(sys.argv[2]))
+    cfg["_dir"] = os.path.dirname(os.path.abspath(sys.argv[2]))
+    res = fn(cfg)
     print(json.dumps(res, indent=1, default=float) if "--json" in sys.argv else rend(res))
 
 

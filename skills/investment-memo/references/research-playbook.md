@@ -79,7 +79,7 @@ A Key Force qualifies if it plausibly moves fair value by ≥15–20%. A salient
 
 ## 6. Pass E — Expectations
 
-- **Consensus:** revenue/EPS for the next 2 years (note GAAP vs adjusted basis), rating distribution, target-price range, forward multiple vs history.
+- **Consensus:** revenue/EPS for the next 2 years, rating distribution, target-price range, forward multiple vs history. Free sources: stockanalysis.com (forecast page), Yahoo Finance (analysis tab), MarketBeat, the company's IR consensus page if it publishes one; record the source and date, and mark summarized figures ⚠. Basis: if the company publishes no non-GAAP EPS, consensus is GAAP; otherwise check last quarter's "actual" on the consensus page against the company's GAAP and adjusted EPS to see which one the Street tracks. Restate consensus EPS and company guidance to **our core basis** before comparing (catalog §11): strip one-off gains they include (a refund inside FY guidance), deduct recurring costs they exclude. Show both: "FY27 consensus $1.95 adjusted → $1.80 core".
 - **Market-implied:** reverse DCF (sector-valuation skill).
 - **Variant view:** "Consensus believes ___. We believe ___ because ___. The gap closes via ___ by ___ (catalyst + date)." If our view equals consensus, say so — the rating then rests on valuation alone, and conviction should be lower.
 

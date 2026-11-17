@@ -4,7 +4,7 @@ Four Claude skills that turn a ticker (or an industry) into a short, decision-re
 
 | Skill | What it does | Key assets |
 |---|---|---|
-| `earnings-normalization` | Rebuilds **Core revenue / Core EPS / Core FCF** from GAAP filings: finds non-recurring items in the P&L and cash-flow statement, classifies them (one-off, lumpy-recurring, cyclical, discrete tax, estimate change), tax-effects them, and scores accounting aggressiveness. Built for GAAP-only reporters like META. | `scripts/sec_facts.py` (SEC XBRL pull: 5 yrs + 8 quarters + TTM, ETR flags), `scripts/filings.py` (list filings incl. post-quarter 8-Ks; read/grep notes and earnings releases), `scripts/core_eps.py` (bridge calculator), adjustment catalog, forensic checklist |
+| `earnings-normalization` | Rebuilds **Core revenue / Core EPS / Core FCF** from GAAP filings: finds non-recurring items in the P&L and cash-flow statement, classifies them (one-off, lumpy-recurring, cyclical, discrete tax, estimate change), tax-effects them, and scores accounting aggressiveness. Built for GAAP-only reporters like META. | filing-reading guide (where each number lives, R pages, cross-footing, data-sheet checklist), `scripts/core_eps.py` (bridge calculator), adjustment catalog, forensic checklist |
 | `sector-valuation` | Values the business by **how its cash is actually made**: SaaS unit economics (CAC/LTV/NRR), ad-platform SOTP, E&P NAV on proved reserves, bank P/TBV vs ROTCE, pharma rNPV, restaurant unit economics, and more. Estimates undisclosed KPIs by triangulating filings, peers and benchmarks, with confidence grades. | `scripts/valuation.py` (DCF incl. capex/D&A-vintage mode, reverse DCF, SOTP, rNPV, LTV, scenarios/IRR/action price), 6 sector playbooks, KPI-estimation guide |
 | `us-industry-deepdive` | Top-down industry study: life-cycle stage by penetration, profit-pool migration, chokepoints, capacity-cycle second derivative, expectation gap, tracking dashboard. Feeds the memo's industry pass. | `SKILL.md` |
 | `investment-memo` | Orchestrates research → core earnings → valuation → red team → decision, and writes a **≤5-page memo**: thesis & variant view, key forces, competitive position, GAAP→core bridge, valuation, risks, kill conditions, monitoring. | memo template with word budgets, research playbook, `scripts/memo_check.py` (length/structure linter) |
@@ -17,12 +17,9 @@ Claude Code (any project), via this repo as a plugin marketplace:
 /plugin install investment-memo-bundle@investment-agent
 ```
 Or for a single session: `claude --plugin-dir /path/to/Investment_agent`.
-Or copy/symlink the three folders in `skills/` into `~/.claude/skills/`. Keep them together — the memo skill calls its siblings by relative path.
+Or copy/symlink the four folders in `skills/` into `~/.claude/skills/`. Keep them together — the memo skill calls its siblings by relative path.
 
-Set an SEC contact string once — it must include an email; SEC's archive and ticker lookup reject anonymous agents:
-```
-export SEC_USER_AGENT="Your Name your@email.com"
-```
+The agent reads filings itself from SEC EDGAR with web fetch (no API key needed). Scripts only calculate: they never fetch data, so every input number traces to a filing the agent read.
 
 ## Use
 
@@ -32,10 +29,8 @@ export SEC_USER_AGENT="Your Name your@email.com"
 - "Value XOM on its reserves" / "What growth does SNOW's price imply?" → sector-valuation
 - "META just reported — is my thesis intact?" → memo update mode (reads the prior memo in `memos/`)
 
-Scripts run standalone too:
+Calculators run standalone too:
 ```
-python3 skills/earnings-normalization/scripts/sec_facts.py META
-python3 skills/earnings-normalization/scripts/filings.py list META --since 2026-09-30
 python3 skills/earnings-normalization/scripts/core_eps.py skills/earnings-normalization/examples/core_eps_input.json
 python3 skills/sector-valuation/scripts/valuation.py dcf skills/sector-valuation/examples/dcf.json
 python3 skills/investment-memo/scripts/memo_check.py memos/META_2026-11-17.md

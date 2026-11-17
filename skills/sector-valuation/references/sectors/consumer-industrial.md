@@ -66,13 +66,13 @@ Retail · Restaurants & franchisors · Consumer staples · Autos & EVs · Indust
 
 **Value equation:** Installed base × aftermarket revenue + new equipment orders through the cycle; ROIC spread over WACC.
 
-**KPIs:** orders and book-to-bill · backlog and its margin · aftermarket/service % revenue · price vs cost (incl. tariffs) · through-cycle EBIT margin · ROIC · working-capital days · **contract liabilities (customer advances) vs revenue** — for project/engineered-to-order businesses, advances fund working capital and inflate cash at order peaks (sec_facts prints them).
+**KPIs:** orders and book-to-bill · backlog and its margin · aftermarket/service % revenue · price vs cost (incl. tariffs) · through-cycle EBIT margin · ROIC · working-capital days · **contract liabilities (customer advances) vs revenue** — for project/engineered-to-order businesses, advances fund working capital and inflate cash at order peaks (balance sheet, "contract liabilities" or "customer deposits").
 
 **Benchmarks:** book-to-bill ≥1.0; aftermarket mix raises through-cycle margins and multiples; ROIC >10–12% for quality.
 
 **Valuation:** through-cycle EV/EBIT + ROIC-spread analysis; DCF with backlog-driven near-term revenue.
 
-**Traps:** peak margins at the top of capex cycles; backlog cancellations; pension mark-to-market noise (R0); treating advance-inflated cash as excess cash (deduct excess float — valuation-core §8); sales-to-capital DCFs that turn an order downturn into a cash windfall; favorable percentage-of-completion estimate changes and project closeouts that flatter margins late in a cycle; the company's own prior cycle as the base rate (pull 10–15 years with `sec_facts.py --years 15`).
+**Traps:** peak margins at the top of capex cycles; backlog cancellations; pension mark-to-market noise (R0); treating advance-inflated cash as excess cash (deduct excess float — valuation-core §8); sales-to-capital DCFs that turn an order downturn into a cash windfall; favorable percentage-of-completion estimate changes and project closeouts that flatter margins late in a cycle; the company's own prior cycle as the base rate (pull 10–15 years from older 10-Ks).
 
 ---
 
