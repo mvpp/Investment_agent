@@ -1,0 +1,9 @@
+{
+ "_note": "Same inputs as dcf.json plus the solve target. solve = growth | margin",
+ "revenue0": 240000, "years": 10,
+ "growth": {"start": 0.18, "end": 0.05},
+ "ebit_margin": {"start": 0.36, "end": 0.40},
+ "tax_rate": 0.16, "sales_to_capital": 1.2, "wacc": 0.09, "terminal_growth": 0.03, "terminal_roic": 0.20,
+ "net_cash": -1000, "other_claims": 25000, "diluted_shares": 2570,
+ "price": 600, "solve": "growth"
+}

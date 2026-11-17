@@ -1,0 +1,13 @@
+{
+ "_note": "Illustrative. Value a core business on core earnings ex the investment segment; give the investment segment an option value, not a negative multiple.",
+ "segments": [
+  {"name": "Core apps (core EBIT ex investment segment)", "metric": 115000, "multiple": 17, "basis": "FY+1 core EBIT x 17x EV/EBIT"},
+  {"name": "Investment segment (option value)", "value": 60000, "probability": 0.5, "basis": "bull-case value 60B x p=0.5"},
+  {"name": "Equity stakes", "value": 5000, "basis": "carrying value"}
+ ],
+ "holdco_discount": 0.0,
+ "net_cash": -1000,
+ "other_claims": 25000,
+ "diluted_shares": 2570,
+ "price": 600
+}

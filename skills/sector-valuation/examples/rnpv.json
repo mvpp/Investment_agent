@@ -1,0 +1,9 @@
+{
+ "_note": "Illustrative biotech pipeline, USD M. PoS defaults by phase unless 'pos' given.",
+ "discount_rate": 0.10, "tax_rate": 0.15,
+ "assets": [
+  {"name": "Lead asset (obesity)", "phase": "phase3", "peak_sales": 4000, "launch_year": 3, "years_to_peak": 6, "loe_year": 15, "loe_erosion": 0.8, "operating_margin": 0.5, "remaining_dev_cost": 900},
+  {"name": "Follow-on (oral)", "phase": "phase1", "peak_sales": 3000, "launch_year": 7, "years_to_peak": 6, "loe_year": 19, "operating_margin": 0.5, "remaining_dev_cost": 1200}
+ ],
+ "net_cash": 1500, "pv_corporate_costs": 600, "diluted_shares": 120, "expected_dilution": 0.10, "price": 45
+}

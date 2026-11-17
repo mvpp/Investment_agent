@@ -1,0 +1,41 @@
+{
+ "_note": "Capex/D&A mode, illustrative capex boom (USD M). D&A = straight-line over asset_life of the capex vintages, so the boom shows up as a depreciation wave in EBIT. capex_history = the years before year 1, oldest first. ebitda_margin excludes D&A; EBIT margin is an output.",
+ "revenue0": 240000,
+ "years": 10,
+ "growth": {
+  "start": 0.18,
+  "end": 0.05
+ },
+ "ebitda_margin": {
+  "start": 0.54,
+  "end": 0.56
+ },
+ "capex_pct": [
+  0.5,
+  0.45,
+  0.38,
+  0.32,
+  0.27,
+  0.24,
+  0.22,
+  0.2,
+  0.19,
+  0.18
+ ],
+ "asset_life": 6,
+ "capex_history": [
+  27000,
+  37000,
+  70000,
+  105000
+ ],
+ "nwc_pct": 0.0,
+ "tax_rate": 0.16,
+ "wacc": 0.095,
+ "terminal_growth": 0.03,
+ "terminal_roic": 0.2,
+ "net_cash": -1000,
+ "other_claims": 25000,
+ "diluted_shares": 2643,
+ "price": 626
+}

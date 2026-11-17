@@ -1,0 +1,29 @@
+{
+ "_note": "Give each scenario its DCF value today (value_today); the script rolls it to the horizon at cost_of_equity net of dividend yield. Alternatively give `value` at the horizon directly (e.g. exit multiple x year-N EPS).",
+ "price": 626,
+ "years": 3,
+ "dividend_yield": 0.0035,
+ "cost_of_equity": 0.099,
+ "hurdle": 0.15,
+ "margin_of_safety": 0.25,
+ "scenarios": [
+  {
+   "name": "Bear",
+   "prob": 0.25,
+   "value_today": 340,
+   "assumptions": "rev CAGR 7.7%, EBIT margin trough 27% → 31%, RONIC 15%"
+  },
+  {
+   "name": "Base",
+   "prob": 0.45,
+   "value_today": 583,
+   "assumptions": "rev CAGR 10.9%, margin 32% → 37%, RONIC 20%"
+  },
+  {
+   "name": "Bull",
+   "prob": 0.3,
+   "value_today": 861,
+   "assumptions": "rev CAGR 13.5%, margin → 42%, RONIC 25%"
+  }
+ ]
+}

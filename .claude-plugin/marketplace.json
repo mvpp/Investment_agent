@@ -1,0 +1,14 @@
+{
+  "name": "investment-agent",
+  "owner": {
+    "name": "Xihan Liu"
+  },
+  "description": "Investment research skills for US equities: core earnings, sector valuation, investment memos.",
+  "plugins": [
+    {
+      "name": "investment-memo-bundle",
+      "source": "./",
+      "description": "Earnings normalization + sector valuation + investment memo skills"
+    }
+  ]
+}

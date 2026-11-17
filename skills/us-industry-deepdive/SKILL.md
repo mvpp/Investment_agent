@@ -1,6 +1,6 @@
 ---
 name: us-industry-deepdive
-description: Top-down, investment-oriented industry deep-dive for US equities, built around the life cycle and forcing an Expectation-Gap and Profit-Pool field after every dimension. Use whenever the user says things like "analyze this industry/sector", "do an industry deep dive", "is this sector worth investing in", "who makes the money in this value chain", "where is the profit pool", "where's the chokepoint", "has the supply cycle turned", "is the expectation already priced in", "consensus vs variant view", "moat", or "smile curve" — including loose asks like "how's the semis sector" or "is biotech investable". Covers stage diagnosis (penetration-based), profit-pool migration, chokepoint analysis, the capacity-cycle second derivative, stage-mapped valuation, US policy and investability filters, and a tracking dashboard. Forms an "industry → single name" funnel with us-value-investing and tech-earnings-deepdive; pair with macro-liquidity and us-market-sentiment when macro/policy is a Key Force.
+description: Top-down, investment-oriented industry deep-dive for US equities, built around the life cycle and forcing an Expectation-Gap and Profit-Pool field after every dimension. Use whenever the user says things like "analyze this industry/sector", "do an industry deep dive", "is this sector worth investing in", "who makes the money in this value chain", "where is the profit pool", "where's the chokepoint", "has the supply cycle turned", "is the expectation already priced in", "consensus vs variant view", "moat", or "smile curve" — including loose asks like "how's the semis sector" or "is biotech investable". Covers stage diagnosis (penetration-based), profit-pool migration, chokepoint analysis, the capacity-cycle second derivative, stage-mapped valuation, US policy and investability filters, and a tracking dashboard. Industry/sector level only — for a single stock use investment-memo, which calls this skill for its industry pass. Forms an "industry → single name" funnel with investment-memo, sector-valuation and earnings-normalization; pair with macro-liquidity and us-market-sentiment when macro/policy is a Key Force.
 ---
 
 # US Equity Industry Deep-Dive — Investment-Oriented Framework
@@ -395,5 +395,6 @@ Adjust emphasis by the Step 0 purpose:
 
 ## Synergy With Other Skills
 
-- **us-value-investing / tech-earnings-deepdive:** once this skill pins down the link worth betting on, use the single-name skills to pick and cross-check a security within that link (industry → single-name funnel).
+- **investment-memo** (same bundle): once this skill pins down the link worth betting on, write a single-name memo on the best security in that link (industry → single-name funnel). The memo's industry pass uses this skill's Steps 2–6 in compressed form.
+- **sector-valuation** (same bundle): Step 8's stage-mapped methods map to its business-model playbooks; use it for the actual numbers.
 - **macro-liquidity / us-market-sentiment:** pair in Step 9 when policy/macro is a Key Force.

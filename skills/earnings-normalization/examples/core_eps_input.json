@@ -1,0 +1,64 @@
+{
+ "_note": "Worked example: META Q3 2025 (single quarter). GAAP lines from SEC XBRL; adjustment amounts from the Q3-25 8-K/10-Q. Illustrative of the method — re-pull and re-verify before relying on any figure.",
+ "company": "Meta Platforms",
+ "ticker": "META",
+ "period": "Q3 2025",
+ "unit": "USD M",
+ "sector": "general",
+ "gaap": {
+  "revenue": 51242,
+  "operating_income": 20535,
+  "pretax_income": 21663,
+  "tax_expense": 18954,
+  "earnings_to_common": 2709,
+  "diluted_shares": 2572,
+  "reported_diluted_eps": 1.05
+ },
+ "revenue_adjustments": [],
+ "adjustments": [
+  {
+   "event_id": "2025Q3-tax-OBBBA-VA",
+   "item": "One-time non-cash charge: valuation allowance on US federal DTAs after OBBBA enactment",
+   "class": "TAX",
+   "after_tax": 15930,
+   "source": "8-K Q3-25 earnings release; 10-Q Q3-25 income-tax note"
+  },
+  {
+   "event_id": "2025Q3-equity-marks",
+   "item": "Unrealized gain on equity securities (mark-to-market)",
+   "level": "non_operating",
+   "class": "R3",
+   "category": "investment_gain_loss",
+   "pretax": -922,
+   "normal_pretax": 0,
+   "tax_basis": "jurisdiction_specific",
+   "tax_rate": 0.21,
+   "recurrence": {"quarters_reviewed": 8, "similar_events": 8, "assessment": "Marks recur every quarter with either sign; mid-cycle level is zero"},
+   "source": "10-Q Q3-25, interest & other income note"
+  },
+  {
+   "event_id": "2025Q3-RL-loss",
+   "item": "Reality Labs operating loss (discretionary investment segment — value in SOTP, not here)",
+   "class": "R2",
+   "investment": true,
+   "pretax": 4400,
+   "tax_basis": "normalized_estimate",
+   "tax_rate": 0.15,
+   "source": "10-Q Q3-25 segment note"
+  },
+  {
+   "event_id": "2025-useful-life",
+   "item": "Server/network useful-life extension to 5.5 yrs (lower depreciation; ~2.9B FY25 per FY24 10-K)",
+   "class": "EST",
+   "pretax": -725,
+   "source": "10-K FY24, PP&E note (estimate change effective Jan-2025)"
+  }
+ ],
+ "cash": {
+  "cfo": 29999,
+  "capex": 18829,
+  "finance_lease_principal": 545,
+  "sbc": 5555,
+  "one_off_cash": []
+ }
+}

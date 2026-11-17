@@ -1,0 +1,5 @@
+{
+ "_note": "Per-customer annual figures. CAC = fully loaded S&M per new customer.",
+ "arpa": 30000, "gross_margin": 0.78, "annual_churn": 0.10, "annual_expansion": 0.12,
+ "cac": 45000, "discount_rate": 0.10, "max_years": 10
+}

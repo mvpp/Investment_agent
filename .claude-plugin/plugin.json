@@ -1,0 +1,8 @@
+{
+  "name": "investment-memo-bundle",
+  "version": "0.1.0",
+  "description": "Investment memo skills: GAAP-to-core earnings normalization, industry-specific valuation with undisclosed-KPI estimation, US industry deep-dive, and a convergent <=5-page investment memo.",
+  "author": {
+    "name": "Xihan Liu"
+  }
+}
