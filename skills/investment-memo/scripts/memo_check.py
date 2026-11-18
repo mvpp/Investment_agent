@@ -4,7 +4,7 @@
 Usage: python3 memo_check.py memo.md [--max-pages 5] [--calc scenarios.json]
 
 --calc takes the JSON from `valuation.py scenarios <input> --json`; the header must then show
-the same target, fair value today and action price (±1%).
+the labeled target, fair value today and action price, rounded to the displayed precision (up to 1%).
 
 Page estimate: ~450 English words per dense memo page (tables included); one
 English word ~= 1.8 CJK characters. Exit code 1 if any hard check fails.
@@ -69,18 +69,33 @@ SPLIT_RX = r"stock split|stock dividend|\d+[-‑ ]for[-‑ ]\d+|拆股|送股|�
 POST_RX = r"post[- ]split|after the split|split[- ]adjusted|拆股后|送股后|拆分后"
 
 
-def header_numbers(head):
-    return [float(x.replace(",", "")) for x in re.findall(r"\$?(\d[\d,]*\.?\d*)", head)]
+HEADER_FIELDS = (
+    ("target", "expected_value", r"\btarget(?: price)?\b|目标价(?:格)?"),
+    ("fair value today", "fair_value_today", r"\bfair value(?: today)?\b|(?:当前|今日|当日)?(?:公允|合理|内在)价值"),
+    ("action price", "action_price", r"\baction price\b|行动价|买入价|建仓价"),
+)
 
 
 def tie_check(head, calc, fails):
-    nums = header_numbers(head)
-    for label, key in (("target", "expected_value"), ("fair value today", "fair_value_today"), ("action price", "action_price")):
-        v = calc.get(key)
-        if not v:
+    head = re.sub(r"[*_`]", "", head)
+    for label, key, pattern in HEADER_FIELDS:
+        if key not in calc or (calc[key] is None and key != "fair_value_today"):
+            fails.append(f"Scenarios output lacks {key}.")
             continue
-        if not any(abs(n - v) <= 0.01 * abs(v) + 0.5 for n in nums):
-            fails.append(f"Header {label} does not match the scenarios output ({v:,.2f}) — update the header or re-run the calculator.")
+        value = calc[key]
+        if value is None:
+            continue
+        # Optional horizon qualifier belongs to the label, e.g. "Target (3 yr): $120".
+        match = re.search(r"(?:" + pattern + r")[ \t]*(?:[(（][^()（）\n|·]*[)）][ \t]*)?"
+                          r"[:：=]?[ \t]*(?:≤|<=)?[ \t]*(?:USD|US\$|\$|¥|￥)?[ \t]*"
+                          r"(-?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d,.%])", head, re.I)
+        if match:
+            amount = match[1].replace(",", "")
+            decimals = len(amount.partition(".")[2])
+            tolerance = min(0.5 * 10 ** -decimals, max(0.005, abs(value) * 0.01))
+            if abs(float(amount) - value) <= tolerance + 1e-10:
+                continue
+        fails.append(f"Header {label} must show its scenarios value ({value:,.2f}).")
 
 
 def main():

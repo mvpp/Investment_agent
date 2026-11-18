@@ -1,4 +1,6 @@
 {
+ "unit": "USD M",
+ "shares_unit": "M",
  "_note": "Capex/D&A mode, illustrative capex boom (USD M). D&A = straight-line over asset_life of the capex vintages, so the boom shows up as a depreciation wave in EBIT. capex_history = the years before year 1, oldest first. ebitda_margin excludes D&A; EBIT margin is an output.",
  "revenue0": 240000,
  "years": 10,

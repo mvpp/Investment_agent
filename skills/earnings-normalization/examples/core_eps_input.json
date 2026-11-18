@@ -1,5 +1,5 @@
 {
- "_note": "Worked example: META Q3 2025 (single quarter). GAAP lines from SEC XBRL; adjustment amounts from the Q3-25 8-K/10-Q. Illustrative of the method — re-pull and re-verify before relying on any figure.",
+ "_note": "META Q3 2025. Reported amounts are bound to the 8-K exhibit. Estimate inputs are identified in the evidence manifest.",
  "company": "Meta Platforms",
  "ticker": "META",
  "period": "Q3 2025",
@@ -21,7 +21,7 @@
    "item": "One-time non-cash charge: valuation allowance on US federal DTAs after OBBBA enactment",
    "class": "TAX",
    "after_tax": 15930,
-   "source": "8-K Q3-25 earnings release; 10-Q Q3-25 income-tax note"
+   "source": "8-K Exhibit 99.1, provision for income taxes"
   },
   {
    "event_id": "2025Q3-equity-marks",
@@ -31,27 +31,31 @@
    "category": "investment_gain_loss",
    "pretax": -922,
    "normal_pretax": 0,
-   "tax_basis": "jurisdiction_specific",
+   "tax_basis": "normalized_estimate",
    "tax_rate": 0.21,
-   "recurrence": {"quarters_reviewed": 8, "similar_events": 8, "assessment": "Marks recur every quarter with either sign; mid-cycle level is zero"},
-   "source": "10-Q Q3-25, interest & other income note"
+   "recurrence": {
+    "quarters_reviewed": 0,
+    "similar_events": 0,
+    "assessment": "Model assumes a zero mid-cycle mark. This fixture covers one filing and does not establish historical frequency."
+   },
+   "source": "8-K Exhibit 99.1, quarterly cash flows, unrealized gain on marketable equity securities"
   },
   {
    "event_id": "2025Q3-RL-loss",
-   "item": "Reality Labs operating loss (discretionary investment segment — value in SOTP, not here)",
+   "item": "Reality Labs operating loss (discretionary investment segment \u2014 value in SOTP, not here)",
    "class": "R2",
    "investment": true,
-   "pretax": 4400,
+   "pretax": 4432,
    "tax_basis": "normalized_estimate",
    "tax_rate": 0.15,
-   "source": "10-Q Q3-25 segment note"
+   "source": "8-K Exhibit 99.1, segment information, Reality Labs income (loss) from operations"
   },
   {
    "event_id": "2025-useful-life",
-   "item": "Server/network useful-life extension to 5.5 yrs (lower depreciation; ~2.9B FY25 per FY24 10-K)",
+   "item": "Illustrative quarterly depreciation uplift from revised useful lives (informational only)",
    "class": "EST",
    "pretax": -725,
-   "source": "10-K FY24, PP&E note (estimate change effective Jan-2025)"
+   "source": "FY24 Form 10-K, change in accounting estimate, full-year depreciation outlook"
   }
  ],
  "cash": {
@@ -60,5 +64,10 @@
   "finance_lease_principal": 545,
   "sbc": 5555,
   "one_off_cash": []
- }
+ },
+ "period_start": "2025-07-01",
+ "period_end": "2025-09-30",
+ "as_of": "2025-10-29",
+ "has_nci": false,
+ "evidence": "meta-q3-2025/evidence.json"
 }

@@ -46,5 +46,5 @@ Build one workpaper table: 5 fiscal years + the last 8 quarters + TTM. Label col
 
 - 10-Qs give the quarter and year-to-date for the P&L, but **cash flow is year-to-date only**: Q2 = 6M − Q1; Q3 = 9M − 6M; Q4 = FY − 9M. Mark derived quarters `*`.
 - Q4 EPS and Q4 diluted shares cannot be derived by subtraction (share counts are averages and anti-dilution differs between loss and profit periods). Take them from the Q4 earnings release.
-- TTM = latest 9M (or 6M/3M) + prior FY − prior-year comparable YTD. For TTM EPS, sum the four reported quarterly EPS figures; for TTM shares, average the four quarters.
+- TTM = latest 9M (or 6M/3M) + prior FY − prior-year comparable YTD. Tie each quarter to its own EPS note. Add the four reported EPS values for trailing GAAP EPS, and add the four unrounded quarterly Core EPS values for trailing Core EPS. Restate all quarters to the same split basis. Record trailing earnings to common as a separate flow and the valuation share count as a dated balance.
 - **Release out, 10-Q/10-K not yet filed** (2–6 weeks after quarter end): the newest quarter exists only in the 8-K EX-99.1. Use it, and follow the earnings-normalization "release out" steps (cash-flow estimates marked `(E)`, note checks deferred to Update mode).

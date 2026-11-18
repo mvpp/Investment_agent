@@ -1,4 +1,6 @@
 {
+ "unit": "USD M",
+ "shares_unit": "M",
  "_note": "Illustrative biotech pipeline, USD M. PoS defaults by phase unless 'pos' given.",
  "discount_rate": 0.10, "tax_rate": 0.15,
  "assets": [

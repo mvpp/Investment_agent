@@ -1,4 +1,5 @@
 {
+ "unit": "USD M",
  "_note": "Give each scenario its DCF value today (value_today); the script rolls it to the horizon at cost_of_equity net of dividend yield. Alternatively give `value` at the horizon directly (e.g. exit multiple x year-N EPS).",
  "price": 626,
  "years": 3,

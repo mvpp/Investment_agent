@@ -1,4 +1,6 @@
 {
+ "unit": "USD M",
+ "shares_unit": "M",
  "_note": "Illustrative inputs (hypothetical ad platform), USD M. Replace every number with researched/core figures.",
  "revenue0": 240000,
  "years": 10,

@@ -19,7 +19,7 @@ Paths to scripts and references below are relative to this skill's directory (si
 Confirm (ask only what you can't infer): ticker; purpose — **new idea**, **existing position review**, or **post-earnings update** (→ Update mode below); horizon (default 3 years for both the target price and the IRR — one horizon keeps the numbers consistent); any portfolio rules (position sizing, hurdle rate). Match the user's language for the memo (Chinese request → Chinese memo; keep tickers, metrics and accounting terms in English where natural), unless the user or system prompt specifies an output language.
 
 Get fresh data first: latest price, market cap, the most recent 10-K/10-Q, last call transcript, consensus estimates. Training-data knowledge is a starting hypothesis, never a source — later filings exist.
-- Read the filings yourself and build the data sheet per `../earnings-normalization/references/reading-filings.md` (5 years / 8 quarters / TTM, every number verbatim with its URL). Scripts in this bundle only calculate; they don't fetch.
+- Read the filings yourself and build the data sheet per `../earnings-normalization/references/reading-filings.md` (5 years / 8 quarters / TTM, every number verbatim with its URL). Archive the evidence manifest and local filing extracts with the workpapers. Run the earnings and valuation calculators with `--require-evidence --json` and retain their output. [Evidence format](../earnings-normalization/references/evidence.md)
 - **Every 8-K filed after the latest quarter end.** Financings, share issuance (forward sales, mandatory converts, ATMs), splits/stock dividends, settlements and M&A after the period change the share count, net debt and thesis; they never show up in the quarter's statements.
 - If the latest results exist only as an 8-K release (10-Q/10-K pending), use the release as the latest period and follow the earnings-normalization "release out, filing pending" steps. If the price you have predates the release (e.g. after-hours print), say so in the header and, if you can get it, show both pre- and post-release prices.
 
@@ -46,7 +46,7 @@ The reader is going to make a decision and then track it. Every extra paragraph 
 - Numbers in tables, causality in prose. Each claim quantified and sourced.
 - State what you did **not** adjust or include and why — that's where readers find hidden assumptions.
 - Balanced: present the bear case at full strength. Don't minimize risks; a reader will find them anyway, and credibility is the asset.
-- Tables must tie: §4 core figures are the base year for §5; scenario values in §2 = calculator output; kill conditions in §6 = red lines in §7. Per-share values use one share count — pro-forma for post-period issuance/splits — stated once in §5; if it differs from the weighted count behind TTM core EPS, say so.
+- Tables must tie: §4 core figures are the base year for §5; scenario values in §2 = calculator output; kill conditions in §6 = red lines in §7. State the four quarterly EPS denominators, today's pro-forma valuation shares, and the expected horizon share count used for a fundamentals-based target.
 
 ## Output
 

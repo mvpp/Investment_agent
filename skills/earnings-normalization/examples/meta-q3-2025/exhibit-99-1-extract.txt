@@ -1,0 +1,36 @@
+Meta Reports Third Quarter 2025 Results
+MENLO PARK, Calif. – October 29, 2025 – Meta Platforms, Inc. (Nasdaq: META) today reported financial results for the
+quarter ended September 30, 2025.
+result, the third quarter 2025 provision for income taxes includes a one-time, non-cash income tax charge of $15.93 billion.
+•     Diluted EPS would have increased by $6.20 to $7.25, compared to the reported diluted EPS of $1.05.
+CONDENSED CONSOLIDATED STATEMENTS OF INCOME
+(In millions, except per share amounts)
+Three Months Ended September 30,        Nine Months Ended September 30,
+2025              2024              2025              2024
+Revenue                                                         $         51,242      $     40,589      $    141,073    $      116,116
+Income from operations                                                    20,535            17,350            58,531             46,016
+Income before provision for income taxes                                  21,663            17,822            60,578             47,111
+Provision for income taxes*                                               18,954             2,134            22,888              5,589
+Net income                                                      $          2,709      $     15,688      $     37,690    $        41,522
+Basic                                                         $              1.08   $          6.20   $       14.96   $         16.37
+Diluted                                                       $              1.05   $          6.03   $       14.62   $         15.88
+Weighted-average shares used to compute earnings
+per share:
+Diluted                                                                  2,572             2,600              2,578             2,615
+CONDENSED CONSOLIDATED STATEMENTS OF CASH FLOWS
+(In millions)
+Three Months Ended            Nine Months Ended
+September 30,                September 30,
+2025           2024           2025           2024
+Share-based compensation                                                    5,555           4,250        14,537         12,428
+Unrealized gain on marketable equity securities                              (922)             —           (548)            —
+Net cash provided by operating activities                                29,999         24,724         79,586         63,340
+Purchases of property and equipment                                           (18,829)        (8,258)       (48,308)       (22,831)
+Principal payments on finance leases                                             (545)         (944)         (1,770)        (1,558)
+Segment Information
+(In millions)
+Three Months Ended            Nine Months Ended
+September 30,                September 30,
+2025          2024            2025         2024
+Income (loss) from operations:
+Reality Labs                                                            (4,432)       (4,428)        (13,171)     (12,762)

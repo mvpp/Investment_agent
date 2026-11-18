@@ -1,4 +1,6 @@
 {
+ "unit": "USD M",
+ "shares_unit": "M",
  "_note": "Incremental-margin mode, illustrative high-growth software company (USD M). The average EBIT margin is built from margin0 plus incremental_margin on each year's new revenue, capped at margin_cap. Use when today's margin understates steady-state economics (a high EV/S name with high incremental margins). incremental_margin = Δcore EBIT / Δcore revenue over 4–8 quarters (earnings-normalization), faded toward a peer-supported level.",
  "revenue0": 2000,
  "years": 10,

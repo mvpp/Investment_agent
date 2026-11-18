@@ -1,4 +1,6 @@
 {
+ "unit": "USD M",
+ "shares_unit": "M",
  "_note": "Same inputs as dcf.json plus the solve target. solve = growth | margin",
  "revenue0": 240000, "years": 10,
  "growth": {"start": 0.18, "end": 0.05},

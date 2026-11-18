@@ -35,7 +35,7 @@ For each KPI: use disclosure if it exists; otherwise derive from filings or tria
 Start from **core** revenue/EBIT/EPS/FCF from the earnings-normalization skill, never a GAAP period distorted by one-offs. If that hasn't been done, do at least a quick pass for discrete tax items, legal accruals, impairments and investment gains first. For the EV bridge and share count, use post-period figures: 8-Ks after the quarter end (new debt, equity issuance, mandatory converts, splits) — valuation-core §8.
 
 ### Step 5 — Run the primary method with the calculator
-`scripts/valuation.py` does the arithmetic so numbers tie. Each subcommand takes a JSON file (templates in `examples/`):
+`scripts/valuation.py` does the arithmetic so numbers tie. For memo workpapers, use `--require-evidence --json` and the [evidence manifest](../earnings-normalization/references/evidence.md). DCF, reverse DCF, SOTP and rNPV require explicit `unit` and `shares_unit` of the same scale (e.g. `USD M` and `M`). Each subcommand takes a JSON file (templates in `examples/`):
 
 | Command | Use for |
 |---|---|
@@ -44,7 +44,7 @@ Start from **core** revenue/EBIT/EPS/FCF from the earnings-normalization skill, 
 | `... sotp in.json` | Segment value × multiple or explicit/option value, holdco discount, per-share bridge |
 | `... rnpv in.json` | Drug pipeline rNPV with phase PoS defaults, launch ramp, LOE erosion, dilution |
 | `... ltv in.json` | SaaS/subscription LTV, LTV/CAC, payback, implied NRR |
-| `... scenarios in.json` | Per-scenario `value_today` — or `"dcf": "dcf_bear.json"` to compute it from that scenario's DCF input, so a revised DCF flows through — rolled to the horizon at cost of equity → target, expected IRR vs 15% hurdle, skew on today's values, and the header action price. Save `--json` output for `memo_check.py --calc` |
+| `... scenarios in.json` | Per-scenario `value_today` — or `"dcf": "dcf_bear.json"` to compute it from that scenario's DCF input, so a revised DCF flows through — with a projected horizon equity bridge for the fundamentals-based target, plus the required-return roll-forward → target, expected IRR vs 15% hurdle, skew on today's values, and the header action price. Save `--json` output for `memo_check.py --calc` |
 
 For NAV-style models (E&P, mining, REITs), compute component values (PV-10 adjusted to your deck, risked inventory, cap-rate NAV) and sum them with `sotp`.
 
@@ -55,7 +55,7 @@ For NAV-style models (E&P, mining, REITs), compute component values (PV-10 adjus
 If methods disagree by >25%, explain which input drives the gap rather than averaging it away.
 
 ### Step 7 — Scenarios, target, action price
-Bear/base/bull built by changing the Step 2 KPIs (not ±X% on price), with evidence-based probabilities. Run `scenarios` (give each scenario its DCF `value_today` and the `cost_of_equity`) for target price (default 3-yr horizon), expected IRR (long hurdle ≥15%), skew (prefer ≥2:1), and the action price = lower of fair value × (1 − MOS) and the max price that earns the hurdle. MOS follows one rule (valuation-core §7): quality grade A 15% / B 25% / C 35%, +10 points each for cyclical, policy-binary or high leverage (two or more), capped at 50%.
+Bear/base/bull built by changing the Step 2 KPIs (not ±X% on price), with evidence-based probabilities. Run `scenarios` (use a scenario DCF and year-end `horizon_bridge` for the fundamental target, and `cost_of_equity` for the roll-forward) for target price (default 3-yr horizon), expected IRR (long hurdle ≥15%), skew (prefer ≥2:1), and the action price = lower of fair value × (1 − MOS) and the max price that earns the hurdle. MOS follows one rule (valuation-core §7): quality grade A 15% / B 25% / C 35%, +10 points each for cyclical, policy-binary or high leverage (two or more), capped at 50%.
 
 ## Output (feeds memo §2 and §5 — keep it to this)
 

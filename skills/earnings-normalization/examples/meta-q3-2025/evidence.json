@@ -1,0 +1,238 @@
+{
+  "ticker": "META",
+  "period_start": "2025-07-01",
+  "period_end": "2025-09-30",
+  "documents": {
+    "release": {
+      "ticker": "META",
+      "form": "8-K",
+      "accession": "0001628280-25-047114",
+      "filing_date": "2025-10-29",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1326801/000162828025047114/meta-09302025xexhibit991.htm",
+      "extract_from": "https://investor.atmeta.com/files/doc_financials/2025/q3/Meta-09-30-2025-Exhibit-99-1-Final.pdf",
+      "snapshot": "exhibit-99-1-extract.txt",
+      "sha256": "b1371e4509058676acb0ebfcff48e6a3c9076b6968b536ec0a0338ee6ff9acbc",
+      "column_periods": {
+        "1": [
+          "2025-07-01",
+          "2025-09-30"
+        ],
+        "2": [
+          "2024-07-01",
+          "2024-09-30"
+        ],
+        "3": [
+          "2025-01-01",
+          "2025-09-30"
+        ],
+        "4": [
+          "2024-01-01",
+          "2024-09-30"
+        ]
+      }
+    }
+  },
+  "facts": {
+    "/gaap/revenue": {
+      "value": 51242,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 10,
+      "column": 1,
+      "source_location": "Revenue"
+    },
+    "/gaap/operating_income": {
+      "value": 20535,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 11,
+      "column": 1,
+      "source_location": "Income from operations"
+    },
+    "/gaap/pretax_income": {
+      "value": 21663,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 12,
+      "column": 1,
+      "source_location": "Income before provision for income taxes"
+    },
+    "/gaap/tax_expense": {
+      "value": 18954,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 13,
+      "column": 1,
+      "source_location": "Provision for income taxes*"
+    },
+    "/gaap/earnings_to_common": {
+      "value": 2709,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 14,
+      "column": 1,
+      "source_location": "Net income"
+    },
+    "/gaap/diluted_shares": {
+      "value": 2572,
+      "unit": "shares_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 19,
+      "column": 1,
+      "source_location": "Diluted"
+    },
+    "/gaap/reported_diluted_eps": {
+      "value": 1.05,
+      "unit": "USD/share",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 16,
+      "column": 1,
+      "source_location": "Diluted"
+    },
+    "/adjustments/0/after_tax": {
+      "value": 15930,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 4,
+      "column": 1,
+      "source_location": "result, the third quarter 2025 provision for income taxes includes a one-time, non-cash income tax charge of",
+      "factor": 1000,
+      "event_id": "2025Q3-tax-OBBBA-VA"
+    },
+    "/adjustments/1/pretax": {
+      "value": -922,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 26,
+      "column": 1,
+      "source_location": "Unrealized gain on marketable equity securities",
+      "event_id": "2025Q3-equity-marks"
+    },
+    "/adjustments/2/pretax": {
+      "value": 4432,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 36,
+      "column": 1,
+      "source_location": "Reality Labs",
+      "factor": -1,
+      "event_id": "2025Q3-RL-loss"
+    },
+    "/cash/cfo": {
+      "value": 29999,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 27,
+      "column": 1,
+      "source_location": "Net cash provided by operating activities"
+    },
+    "/cash/capex": {
+      "value": 18829,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 28,
+      "column": 1,
+      "source_location": "Purchases of property and equipment",
+      "factor": -1
+    },
+    "/cash/finance_lease_principal": {
+      "value": 545,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 29,
+      "column": 1,
+      "source_location": "Principal payments on finance leases",
+      "factor": -1
+    },
+    "/cash/sbc": {
+      "value": 5555,
+      "unit": "USD_M",
+      "evidence_type": "reported",
+      "confidence": "high",
+      "document": "release",
+      "line": 25,
+      "column": 1,
+      "source_location": "Share-based compensation"
+    },
+    "/adjustments/1/normal_pretax": {
+      "value": 0,
+      "unit": "USD_M",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "Assume no net equity mark across a cycle.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025Q3-equity-marks"
+    },
+    "/adjustments/1/tax_rate": {
+      "value": 0.21,
+      "unit": "ratio",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "Use 21% as the modeled marginal tax rate on equity gains.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025Q3-equity-marks"
+    },
+    "/adjustments/1/recurrence/quarters_reviewed": {
+      "value": 0,
+      "unit": "count",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "This single-quarter fixture reviews no prior quarters.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025Q3-equity-marks"
+    },
+    "/adjustments/1/recurrence/similar_events": {
+      "value": 0,
+      "unit": "count",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "No prior quarters examined in this fixture.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025Q3-equity-marks"
+    },
+    "/adjustments/2/tax_rate": {
+      "value": 0.15,
+      "unit": "ratio",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "Assume a 15% marginal rate for the optional ex-investment illustration.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025Q3-RL-loss"
+    },
+    "/adjustments/3/pretax": {
+      "value": -725,
+      "unit": "USD_M",
+      "evidence_type": "estimate",
+      "confidence": "low",
+      "method": "Illustrative equal allocation of the FY24 10-K outlook of $2.9bn over four quarters.",
+      "estimate_date": "2025-10-29",
+      "event_id": "2025-useful-life"
+    }
+  }
+}

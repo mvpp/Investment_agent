@@ -9,7 +9,7 @@ Exit code 2 = input errors: no core number is computed until they are fixed.
 
 Input schema (see ../examples/core_eps_input.json):
 {
-  "company": "Meta Platforms", "ticker": "META", "period": "TTM Q3-26", "unit": "USD M",
+  "company": "Meta Platforms", "ticker": "META", "period": "Q3-26", "unit": "USD M",
   "sector": "general",          # optional: bank | insurance | reit | commodity | retail | pharma | general
   "gaap": {
     "revenue":..., "operating_income":..., "pretax_income":..., "tax_expense":...,
@@ -17,10 +17,10 @@ Input schema (see ../examples/core_eps_input.json):
                                 # preferred dividends, NCI and two-class/if-converted effects (EPS note)
     "diluted_shares":...,       # diluted weighted-average shares, same scale as money (e.g. millions)
     "reported_diluted_eps":..., # as filed; must tie to earnings_to_common / diluted_shares within $0.02
-    "core_diluted_shares":...,  # optional: recomputed denominator (required if GAAP loss -> core profit)
+    "core_diluted_shares":...,  # optional: recomputed denominator (required when profit/loss status flips)
     "core_shares_method": "..." # required with core_diluted_shares
   },
-  "revenue_adjustments": [{"item":..., "amount": -500, "class":"R0", "source":...}],
+  "revenue_adjustments": [{"event_id":..., "item":..., "amount": -500, "class":"R0", "source":...}],
   "adjustments": [
     {"event_id":"2026Q3-legal-AG", "item":..., "class":"R1", "category":"litigation",
      "level":"operating"|"non_operating", "pretax": 9890, "normal_pretax": 875,
@@ -76,11 +76,15 @@ Controls (errors stop the calculation; warnings need a sentence in the memo):
   - Every earnings-changing item has an explicit tax_basis and tax_rate/tax_effect;
     no default rate. not_deductible / no_tax_effect must carry zero tax.
   - R0/R1/R3 items carry recurrence evidence (quarters reviewed, similar events, assessment).
-  - GAAP loss -> core profit requires a recomputed diluted share count.
+  - A switch between GAAP profit and Core loss, or loss and profit, requires a recomputed diluted share count.
   - Sector overlays flag adjustments that are ordinary business in that sector.
 """
 import json
 import sys
+from datetime import date, timedelta
+from pathlib import Path
+
+from evidence import number, positive, units, verify
 
 SBC_WORDS = ("stock-based", "stock based", "share-based", "share based", "sbc", "equity comp")
 TAX_BASES = {"filing_specific", "jurisdiction_specific", "normalized_estimate", "not_deductible", "no_tax_effect"}
@@ -130,15 +134,18 @@ def tax_for(a, base, name, errors, warnings):
     if basis not in TAX_BASES:
         errors.append(f"'{name}': tax_basis must be one of {sorted(TAX_BASES)} (no default tax rate).")
         return 0.0
+    if sum(key in a for key in ("tax_rate", "tax_effect", "gross_tax_effect")) != 1:
+        errors.append(f"'{name}': provide exactly one tax rate or effect.")
+        return 0.0
     if "tax_effect" in a:
-        tax = float(a["tax_effect"])
+        tax = number(a["tax_effect"], "tax_effect")
     elif "gross_tax_effect" in a:
         if not a.get("pretax"):
             errors.append(f"'{name}': gross_tax_effect needs the gross pretax charge.")
             return 0.0
-        tax = base * float(a["gross_tax_effect"]) / float(a["pretax"])
+        tax = base * number(a["gross_tax_effect"], "gross_tax_effect") / float(a["pretax"])
     elif "tax_rate" in a:
-        tax = base * float(a["tax_rate"])
+        tax = base * number(a["tax_rate"], "tax_rate")
     else:
         errors.append(f"'{name}': give tax_rate, tax_effect or gross_tax_effect explicitly.")
         return 0.0
@@ -173,15 +180,88 @@ def check_recurrence(a, cls, name, errors, warnings):
         warnings.append(f"'{name}': assessed as recurring yet removed as R0 — reclassify or justify.")
 
 
-def run(cfg):
+def run(cfg, directory=".", require_evidence=False):
+    try:
+        units(cfg)
+        if "quarters" in cfg:
+            return ttm(cfg, directory, require_evidence)
+        if "TTM" in str(cfg.get("period", "")).upper():
+            raise ValueError("TTM requires four quarterly bridges in quarters")
+        audit = verify(cfg, directory, require_evidence)
+        result = quarter(cfg)
+        if audit and not result["errors"]:
+            result["evidence"] = audit
+        return result
+    except (ValueError, KeyError, TypeError, AttributeError, IndexError, OSError, ArithmeticError) as exc:
+        return {"errors": [f"Invalid input: {exc}"], "warnings": []}
+
+
+def ttm(cfg, directory, require_evidence):
+    quarters = cfg["quarters"]
+    if len(quarters) != 4:
+        raise ValueError("TTM requires four consecutive quarters, oldest first")
+    shares = positive(cfg["valuation_shares"], "valuation_shares")
+    if "gaap" in cfg or "adjustments" in cfg or "revenue_adjustments" in cfg or "cash" in cfg:
+        raise ValueError("put bridge inputs inside each quarter")
+    if not cfg.get("unit") or not cfg.get("ticker"):
+        raise ValueError("TTM requires one unit and ticker across quarters")
+    results = []
+    previous = None
+    for q in quarters:
+        start, end = (date.fromisoformat(q[k]) for k in ("period_start", "period_end"))
+        if not 77 <= (end - start).days + 1 <= 105 or (previous and start != previous + timedelta(days=1)):
+            raise ValueError("TTM quarters must be consecutive, non-overlapping fiscal quarters")
+        previous = end
+        inputs = {k: cfg[k] for k in ("company", "ticker", "unit", "shares_unit", "sector", "as_of", "has_nci") if k in cfg}
+        for key in ("ticker", "unit", "shares_unit", "as_of"):
+            if key in q and key in inputs and inputs[key] != q[key]:
+                raise ValueError(f"TTM quarters must share {key}")
+        if "quarters" in q:
+            raise ValueError("nested TTM input")
+        result = run({**inputs, "period": str(end), **q}, directory, require_evidence)
+        if result["errors"]:
+            raise ValueError(f"{end}: " + " / ".join(result["errors"]))
+        results.append(result)
+    elapsed_days = (previous - date.fromisoformat(quarters[0]["period_start"])).days + 1
+    if not 364 <= elapsed_days <= 371:
+        raise ValueError("four quarters must span a full fiscal year (52 or 53 weeks, or a calendar year)")
+    agg = {}
+    for basis in ("gaap", "core"):
+        agg[basis] = {k: sum(r[basis][k] for r in results)
+                      for k in ("eps", "earnings_to_common", "revenue", "operating_income")}
+        if basis == "gaap":
+            agg[basis]["eps"] = agg[basis]["reported_eps"] = sum(r[basis]["reported_eps"] for r in results)
+        revenue = agg[basis]["revenue"]
+        agg[basis]["op_margin"] = agg[basis]["operating_income"] / revenue if revenue else None
+    if all("cash" in r for r in results):
+        cash = {k: sum(r["cash"][k] for r in results)
+                for k in ("reported_fcf", "core_cfo", "core_fcf", "core_fcf_after_sbc")}
+        ni = agg["core"]["earnings_to_common"]
+        cash["conversion"] = cash["core_fcf_after_sbc"] / ni if ni else None
+        cash["fcf_after_sbc_per_share"] = sum(r["cash"]["fcf_after_sbc_per_share"] for r in results)
+        agg["cash"] = cash
+    if require_evidence or "as_of" in cfg or "evidence" in cfg:
+        # Quarter facts retain their own fiscal dates. The outer fact is the valuation denominator.
+        outer = {k: v for k, v in cfg.items() if k != "quarters"}
+        if outer["period_start"] != quarters[0]["period_start"] or outer["period_end"] != quarters[-1]["period_end"]:
+            raise ValueError("TTM evidence period must span the four quarters")
+        agg["evidence"] = verify(outer, directory, True)
+    return {**agg, "quarters": results, "valuation_shares": shares,
+            "warnings": [w for r in results for w in r["warnings"]], "errors": []}
+
+
+def quarter(cfg):
     g = cfg["gaap"]
     errors, warnings, lines = [], [], []
-    for k in ("revenue", "operating_income", "pretax_income", "tax_expense", "earnings_to_common", "diluted_shares", "reported_diluted_eps"):
+    required = ("revenue", "operating_income", "pretax_income", "tax_expense", "earnings_to_common", "diluted_shares", "reported_diluted_eps")
+    for k in required:
         if k not in g:
             errors.append(f"gaap.{k} is required" + (" (the diluted EPS numerator from the EPS note, not consolidated net income)" if k == "earnings_to_common" else ""))
     if errors:
         return {"errors": errors, "warnings": warnings}
 
+    for k in required:
+        number(g[k], "gaap." + k)
     e2c, shares = g["earnings_to_common"], g["diluted_shares"]
     if shares <= 0:
         errors.append("gaap.diluted_shares must be positive.")
@@ -200,20 +280,39 @@ def run(cfg):
     increase = decrease = 0
     invest_after = 0.0  # after-tax losses of discretionary investment segments (SOTP aid only)
     alts = []  # (name, label, after-tax change to core earnings if the alternative run-rate is used)
+    nci_effect = 0.0
     seen_ids = set()
+    operating_events = set()
+    allocations = {}
+    if type(cfg.get("has_nci", False)) is not bool:
+        raise ValueError("has_nci must be boolean")
+    if "as_of" in cfg and "has_nci" not in cfg:
+        raise ValueError("dated earnings inputs require an explicit has_nci assessment")
 
     for a in cfg.get("adjustments", []):
-        cls = a.get("class", "R0").upper()
+        cls = a.get("class", "").upper()
         name = a.get("item", "?")
         src = a.get("source", "")
         eid = a.get("event_id")
-        if not eid:
+        if cls not in EARNINGS_CHANGING | {"R2", "EST", "TAX"}:
+            errors.append(f"'{name}': unknown adjustment class '{cls}'")
+            continue
+        level = a.get("level", "operating")
+        if level not in ("operating", "non_operating"):
+            errors.append(f"'{name}': invalid adjustment level")
+        applies = cls in EARNINGS_CHANGING or cls == "TAX" or a.get("investment") or a.get("apply")
+        if applies and cfg.get("has_nci") and "nci_fraction" not in a:
+            errors.append(f"'{name}': provide the NCI fraction of this event's after-tax effect")
+        nci = number(a.get("nci_fraction", 0), "nci_fraction")
+        if not 0 <= nci <= 1:
+            errors.append(f"'{name}': nci_fraction must be between 0 and 1")
+        if not isinstance(eid, str) or not eid.strip():
             errors.append(f"'{name}': event_id is required (one id per economic event, reused wherever it appears).")
         elif eid in seen_ids:
             errors.append(f"'{name}': duplicate event_id '{eid}' — the same event is being booked twice.")
         else:
             seen_ids.add(eid)
-        if not src:
+        if not isinstance(src, str) or not src.strip():
             errors.append(f"'{name}': source is required (filing + note/page).")
         if any(w in name.lower() for w in SBC_WORDS) and cls in EARNINGS_CHANGING and not a.get("ipo_catch_up"):
             errors.append(f"'{name}': SBC is a recurring cost of doing business and cannot be removed (only a one-time IPO/acquisition catch-up may, with ipo_catch_up: true).")
@@ -222,7 +321,7 @@ def run(cfg):
             warnings.append(f"'{name}' ({sector}): {rules[cat]}.")
 
         if cls == "TAX":
-            amt = a["after_tax"]
+            amt = number(a["after_tax"], "after_tax")
             tb = a.get("tax_basis", "filing_specific")
             if tb not in ("filing_specific", "normalized_estimate"):
                 errors.append(f"'{name}': TAX items take tax_basis filing_specific (amount disclosed) or normalized_estimate (sized by you).")
@@ -232,17 +331,19 @@ def run(cfg):
                 check_recurrence(a, "TAX (normalized)", name, errors, warnings)
                 amt = amt - a["normal_after_tax"]
             tax_items += amt
-            lines.append((eid, name, cls + (" (vs normal)" if "normal_after_tax" in a else ""), None, None, None, amt, src))
+            nci_effect += amt * nci
+            allocations[eid] = amt * nci
+            lines.append((eid, name, cls + (" (vs normal)" if "normal_after_tax" in a else ""), None, None, None, amt * (1 - nci), src))
             if amt > 0:
                 increase += 1
             elif amt < 0:
                 decrease += 1
             continue
 
-        pre = a.get("pretax", 0.0)
+        pre = number(a["pretax"], "pretax") if applies else a.get("pretax", 0.0)
         if cls == "R2":
             if a.get("investment"):
-                invest_after += pre - tax_for(a, pre, name, errors, warnings)
+                invest_after += (pre - tax_for(a, pre, name, errors, warnings)) * (1 - nci)
             lines.append((eid, name, cls + (" (investment)" if a.get("investment") else ""), pre, 0.0, 0.0, 0.0, src))
             continue
         if cls == "EST" and not a.get("apply"):
@@ -259,12 +360,16 @@ def run(cfg):
         else:  # R0 or applied EST
             adj = pre
         tax = tax_for(a, adj, name, errors, warnings)
-        after = adj - tax
+        allocations[eid] = (adj - tax) * nci
+        nci_effect += allocations[eid]
+        after = (adj - tax) * (1 - nci)
         if "alt_normal_pretax" in a and cls in ("R1", "R3"):
             d = a.get("normal_pretax", 0.0) - a["alt_normal_pretax"]  # alt adjustment − base adjustment
             rate = tax / adj if adj else float(a.get("tax_rate", 0.0))
-            alts.append((name, a.get("alt_label", "alternative run-rate"), d * (1 - rate)))
-        if a.get("level", "operating") == "operating":
+            alts.append((name, a.get("alt_label", "alternative run-rate"), d * (1 - rate) * (1 - nci)))
+        if level == "operating":
+            if adj and eid:
+                operating_events.add(eid)
             op_adj += adj
         else:
             nonop_adj += adj
@@ -275,16 +380,43 @@ def run(cfg):
             decrease += 1
         lines.append((eid, name, cls, pre, adj, tax, after, src))
 
-    core_ni = e2c + (op_adj + nonop_adj - tax_on_adj) + tax_items
+    core_ni = e2c + (op_adj + nonop_adj - tax_on_adj) + tax_items - nci_effect
+    revenue_ids = set()
+    for row in cfg.get("revenue_adjustments", []):
+        eid = row.get("event_id")
+        if not isinstance(eid, str) or not eid.strip() or eid in revenue_ids:
+            errors.append("Revenue adjustment needs a unique event_id")
+        revenue_ids.add(eid)
+        if row.get("class", "R0") not in EARNINGS_CHANGING:
+            errors.append(f"{eid}: invalid revenue adjustment class")
+        if not isinstance(row.get("source"), str) or not row["source"].strip():
+            errors.append(f"{eid}: revenue adjustment needs a source")
+        number(row["amount"], "revenue amount")
+        if eid not in operating_events and not (isinstance(row.get("no_earnings_effect_reason"), str) and row["no_earnings_effect_reason"].strip()):
+            errors.append(f"{eid}: link an operating adjustment or document zero earnings impact")
+        if eid in operating_events and row.get("no_earnings_effect_reason"):
+            errors.append(f"{eid}: zero-impact explanation conflicts with EBIT adjustment")
+        if eid in seen_ids and eid not in operating_events and any(line[0] == eid and line[6] for line in lines):
+            errors.append(f"{eid}: zero-impact explanation conflicts with earnings adjustment")
     core_shares = shares
     if "core_diluted_shares" in g:
-        if not g.get("core_shares_method"):
+        if not isinstance(g.get("core_shares_method"), str) or not g["core_shares_method"].strip():
             errors.append("gaap.core_shares_method is required with core_diluted_shares (how the recomputed denominator was built).")
-        core_shares = g["core_diluted_shares"]
-    elif e2c < 0 < core_ni:
+        core_shares = positive(g["core_diluted_shares"], "core_diluted_shares")
+    elif e2c >= 0 > core_ni and "basic_shares" in g:
+        core_shares = positive(g["basic_shares"], "gaap.basic_shares")
+    elif e2c >= 0 > core_ni:
+        errors.append("GAAP profit turns into core loss: provide core_diluted_shares excluding anti-dilutive securities and core_shares_method.")
+    elif e2c <= 0 < core_ni:
         errors.append("GAAP loss turns into core profit: the GAAP diluted count excludes anti-dilutive securities. "
                       "Provide core_diluted_shares (treasury method on options/RSUs, if-converted on converts) and core_shares_method.")
 
+    if e2c < 0 < core_ni and core_shares < shares:
+        errors.append("Core profit share count cannot be below the GAAP loss share count")
+    if e2c >= 0 > core_ni and core_shares > shares:
+        errors.append("Core loss share count cannot exceed the GAAP diluted count")
+    if e2c >= 0 > core_ni and "basic_shares" in g and core_shares != positive(g["basic_shares"], "gaap.basic_shares"):
+        errors.append("Use the basic weighted-average share count for a core loss")
     if errors:
         return {"errors": errors, "warnings": warnings}
 
@@ -305,19 +437,30 @@ def run(cfg):
     if core_etr is not None and not (0.08 <= core_etr <= 0.30):
         warnings.append(f"Core effective tax rate {pct(core_etr)} looks abnormal — check discrete tax items and the tax on adjustments.")
 
+    def supplemental_eps(earnings, label):
+        if (earnings < 0) == (core_ni < 0):
+            return earnings / core_shares
+        if earnings < 0 and "basic_shares" in g:
+            return earnings / positive(g["basic_shares"], "gaap.basic_shares")
+        if (earnings < 0) == (e2c < 0):
+            return earnings / shares
+        warnings.append(f"{label}: EPS unavailable because the alternative changes dilution status and lacks a suitable denominator.")
+        return None
+
     res = {
         "company": cfg.get("company"), "period": cfg.get("period"), "unit": cfg.get("unit", ""), "sector": sector,
         "gaap": {"revenue": g["revenue"], "operating_income": g["operating_income"], "earnings_to_common": e2c, "eps": gaap_eps,
-                 "reported_eps": g["reported_diluted_eps"], "etr": gaap_etr, "op_margin": g["operating_income"] / g["revenue"], "shares": shares},
+                 "reported_eps": g["reported_diluted_eps"], "etr": gaap_etr, "op_margin": g["operating_income"] / g["revenue"] if g["revenue"] else None, "shares": shares},
         "core": {"revenue": core_rev, "operating_income": core_op, "earnings_to_common": core_ni, "eps": core_eps, "etr": core_etr,
-                 "op_margin": core_op / core_rev, "shares": core_shares},
-        "core_ex_investment_eps": (core_ni + invest_after) / core_shares if invest_after else None,
+                 "op_margin": core_op / core_rev if core_rev else None, "shares": core_shares},
+        "nci_adjustment": nci_effect, "nci_by_event": allocations,
+        "core_ex_investment_eps": supplemental_eps(core_ni + invest_after, "Ex-investment") if invest_after else None,
         "lines": lines, "errors": [], "warnings": warnings, "revenue_adjustments": cfg.get("revenue_adjustments", []),
-        "alternatives": [{"item": n, "label": lb, "core_eps": (core_ni + d) / core_shares} for n, lb, d in alts]
-                        + ([{"item": "all alternatives together", "label": "", "core_eps": (core_ni + sum(d for *_, d in alts)) / core_shares}] if len(alts) > 1 else []),
+        "alternatives": [{"item": n, "label": lb, "core_eps": supplemental_eps(core_ni + d, n)} for n, lb, d in alts]
+                        + ([{"item": "all alternatives together", "label": "", "core_eps": supplemental_eps(core_ni + sum(d for *_, d in alts), "All alternatives")}] if len(alts) > 1 else []),
     }
     for x in res["alternatives"]:
-        if abs(x["core_eps"] - core_eps) > 0.05 * abs(core_eps):
+        if x["core_eps"] is not None and abs(x["core_eps"] - core_eps) > 0.05 * abs(core_eps):
             warnings.append(f"Run-rate choice for '{x['item']}' moves core EPS by more than 5% ({core_eps:.2f} → {x['core_eps']:.2f}) — show both in the memo as a judgment call.")
 
     c = cfg.get("cash")
@@ -355,6 +498,17 @@ def render(r):
         if r.get("warnings"):
             out += ["", "Warnings so far:"] + [f"- {w}" for w in r["warnings"]]
         return "\n".join(out)
+    if "quarters" in r:
+        out = ["## TTM earnings", "", "| Quarter | GAAP EPS (reported) | Core EPS | Core earnings to common | Core shares |",
+               "|---|---|---|---|---|"]
+        for q in r["quarters"]:
+            out.append(f"| {q['period']} | {q['gaap']['reported_eps']:.2f} | {q['core']['eps']:.4f} | {q['core']['earnings_to_common']:,.2f} | {q['core']['shares']:,.2f} |")
+        out += [f"| TTM | {r['gaap']['reported_eps']:.2f} | {r['core']['eps']:.2f} | {r['core']['earnings_to_common']:,.2f} | |",
+                f"Valuation shares: {r['valuation_shares']:,.2f}"]
+        out += [f"Core revenue: {r['core']['revenue']:,.2f} · Core operating margin: {pct(r['core']['op_margin'])}"]
+        if "cash" in r:
+            out.append(f"Core FCF after SBC: {r['cash']['core_fcf_after_sbc']:,.2f} · Cash conversion: {pct(r['cash']['conversion'])}")
+        return "\n".join(out + [f"- {w}" for w in r["warnings"]])
     u = r["unit"]
     AMT_DP = 1 if abs(r["gaap"]["earnings_to_common"]) < 1000 else 0
     out = [f"## Core earnings bridge — {r['company']} {r['period']} ({u})", ""]
@@ -372,7 +526,9 @@ def render(r):
     out.append(f"| Earnings to common | {num(gg['earnings_to_common'])} | {num(cc['earnings_to_common'])} |")
     out.append(f"| Diluted shares | {num(gg['shares'], 1)} | {num(cc['shares'], 1)} |")
     out.append(f"| Diluted EPS (GAAP tie-out: reported {gg['reported_eps']}) | {num(gg['eps'], 2)} | **{num(cc['eps'], 2)}** |")
-    if r.get("core_ex_investment_eps"):
+    if r["nci_adjustment"]:
+        out.append(f"| Adjustment allocated to NCI (after tax) | | {num(r['nci_adjustment'])} |")
+    if r.get("core_ex_investment_eps") is not None:
         out.append(f"| Core EPS ex investment segments (SOTP input only — not a headline number) | | {num(r['core_ex_investment_eps'], 2)} |")
     if r["revenue_adjustments"]:
         out += ["", "Revenue adjustments: " + "; ".join(f"{x['item']} {num(x['amount'])} [{x.get('source', '')}]" for x in r["revenue_adjustments"])]
@@ -403,10 +559,15 @@ def render(r):
 def main():
     if len(sys.argv) < 2:
         sys.exit(__doc__)
-    cfg = json.load(open(sys.argv[1]))
-    r = run(cfg)
+    source = Path(sys.argv[1])
+    try:
+        cfg = json.loads(source.read_text())
+        r = run(cfg, source.parent, "--require-evidence" in sys.argv)
+    except (OSError, ValueError) as exc:
+        r = {"errors": [str(exc)], "warnings": []}
     if "--json" in sys.argv:
-        r["lines"] = [dict(zip(["event_id", "item", "class", "pretax", "adjustment", "tax_effect", "after_tax", "source"], l)) for l in r.get("lines", [])]
+        for bridge in r.get("quarters", [r]):
+            bridge["lines"] = [dict(zip(["event_id", "item", "class", "pretax", "adjustment", "tax_effect", "after_tax", "source"], l)) for l in bridge.get("lines", [])]
         print(json.dumps(r, indent=1, default=float))
     else:
         print(render(r))

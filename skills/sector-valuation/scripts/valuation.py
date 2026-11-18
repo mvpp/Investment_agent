@@ -24,8 +24,46 @@ excess_customer_advances, and capital_actions — post-period events not yet in 
 split_factor (e.g. 2 for a pending 2-for-1) prints post-split per-share values next to pre-split ones.
 """
 import json
-import os
 import sys
+from pathlib import Path
+from datetime import date
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "earnings-normalization" / "scripts"))
+from evidence import number, positive, units, verify
+
+
+def probability(value, label):
+    if not 0 <= number(value, label) <= 1:
+        raise ValueError(f"{label} must be in [0, 1]")
+    return value
+
+
+def check_valuation_units(c):
+    if not c.get("unit") or not c.get("shares_unit"):
+        raise ValueError("declare unit and shares_unit before dividing equity value by shares")
+    return units(c)
+
+
+def check_dcf(c):
+    check_valuation_units(c)
+    if type(c["years"]) is not int or c["years"] < 1:
+        raise ValueError("years must be a positive integer")
+    positive(c["revenue0"], "revenue0")
+    for rate in path(c.get("tax_rate", 0.21), c["years"], "tax_rate"):
+        if not 0 <= number(rate, "tax_rate") < 1:
+            raise ValueError("DCF tax_rate must be in [0, 1)")
+    if any(number(rate, "growth") <= -1 for rate in path(c["growth"], c["years"], "growth")):
+        raise ValueError("annual revenue growth must exceed -100%")
+    w = positive(c["wacc"], "wacc")
+    g = number(c["terminal_growth"], "terminal_growth")
+    roic = positive(c.get("terminal_roic", w), "terminal_roic")
+    if not -1 < g < w or g >= roic:
+        raise ValueError("terminal_growth must exceed -100% and be below both WACC and terminal RONIC")
+    if c.get("terminal_da", "steady_state") not in ("steady_state", "final_year"):
+        raise ValueError("invalid terminal_da method")
+    threshold = number(c.get("terminal_reinvestment_threshold", 0.05), "terminal_reinvestment_threshold")
+    if threshold < 0:
+        raise ValueError("terminal_reinvestment_threshold must be nonnegative")
 
 
 # ---------- helpers ----------
@@ -60,9 +98,15 @@ def asset_classes(c):
     """[(share of capex, life)] — `asset_classes` [{"share", "life"}] or a single `asset_life`."""
     if c.get("asset_classes"):
         cls = [(a["share"], a["life"]) for a in c["asset_classes"]]
+        for share, life in cls:
+            probability(share, "asset class share")
+            if type(life) is not int or life < 1:
+                raise ValueError("asset life must be a positive integer")
         if abs(sum(sh for sh, _ in cls) - 1) > 1e-6:
             sys.exit("asset_classes shares must sum to 1")
         return cls
+    if type(c["asset_life"]) is not int or c["asset_life"] < 1:
+        raise ValueError("asset_life must be a positive integer")
     return [(1.0, c["asset_life"])]
 
 
@@ -101,8 +145,8 @@ def bridge(c, ev):
     equity = (ev + c.get("net_cash", 0.0) + c.get("investments", 0.0) - c.get("other_claims", 0.0)
               - c.get("excess_customer_advances", 0.0)
               + sum(a.get("cash", 0.0) for a in acts) - sum(a.get("claims", 0.0) for a in acts))
-    shares = c["diluted_shares"] + sum(a.get("shares", 0.0) for a in acts)
-    return equity, shares
+    shares = positive(c["diluted_shares"], "diluted_shares") + sum(a.get("shares", 0.0) for a in acts)
+    return equity, positive(shares, "shares after capital actions")
 
 
 def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.0, growth_shift=0.0):
@@ -141,18 +185,22 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
     tax = path(c.get("tax_rate", 0.21), n, "tax_rate")
     wacc = c["wacc"] if wacc is None else wacc
     g = c["terminal_growth"] if g is None else g
-    if g >= wacc:
+    if g >= wacc or wacc <= 0 or g <= -1 or g >= c.get("terminal_roic", wacc):
         return None
     mid = c.get("mid_year", True)
     if capex_mode:
         cx = path(c["capex_pct"], n, "capex_pct")
         cls = asset_classes(c)
         lag = c.get("in_service_lag", 0)
+        if type(lag) is not int or lag < 0:
+            raise ValueError("in_service_lag must be a nonnegative integer")
         hist = list(c.get("capex_history") or [c["revenue0"] * cx[0]])
+        if any(number(value, "capex") < 0 for value in [*cx, *hist]):
+            raise ValueError("capex_pct and capex_history must be nonnegative")
         hist = [hist[0]] * max(0, max(l for _, l in cls) + lag - len(hist)) + hist
         nwc = c.get("nwc_pct", 0.0)
     elif c.get("sales_to_capital") is not None:
-        s2c = path(c["sales_to_capital"], n, "sales_to_capital")
+        s2c = [positive(v, "sales_to_capital") for v in path(c["sales_to_capital"], n, "sales_to_capital")]
     else:
         rr = path(c.get("reinvestment_rate", 0.0), n, "reinvestment_rate")
     rev_prev, rows, pv_sum = c["revenue0"], [], 0.0
@@ -190,16 +238,35 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
     per_share = equity / shares
     for row in rows:
         row["nopat_ps"] = row["nopat"] / shares
-    return {"rows": rows, "excess_customer_advances": c.get("excess_customer_advances", 0.0), "pv_explicit": pv_sum, "tv": tv, "pv_tv": pv_tv, "ev": ev, "equity": equity, "per_share": per_share,
+    reconciliation = None
+    if capex_mode:
+        next_revenue = rev_prev * (1 + g)
+        next_capex = next_revenue * cx[-1]
+        # A steady-state D&A uses all vintages growing at g. In final-year mode, advance
+        # the actual vintage schedule by one year to quantify the transition.
+        next_da = (next_capex * steady_da_ratio(cls, lag, g)
+                   if c.get("terminal_da", "steady_state") == "steady_state" else da_from(hist + [next_capex], cls, lag))
+        schedule = next_capex - next_da + nwc * (next_revenue - rev_prev)
+        required = nopat_next * g / ronic
+        schedule_nopat = (next_revenue * m[-1] - next_da) * (1 - tax[-1])
+        schedule_tv = (schedule_nopat - schedule) / (wacc - g)
+        reconciliation = {"nopat": nopat_next, "schedule_nopat": schedule_nopat, "capex": next_capex, "da": next_da, "delta_nwc": nwc * (next_revenue - rev_prev),
+                          "ronic_reinvestment": required, "schedule_reinvestment": schedule,
+                          "gap_fraction_of_nopat": (schedule - required) / abs(nopat_next) if nopat_next else None,
+                          "threshold": c.get("terminal_reinvestment_threshold", 0.05),
+                          "ronic_tv": tv, "schedule_tv": schedule_tv,
+                          "schedule_per_share": per_share + (schedule_tv - tv) / (1 + wacc) ** (n - 0.5 if mid else n) / shares}
+    return {"terminal_reinvestment_reconciliation": reconciliation, "rows": rows, "excess_customer_advances": c.get("excess_customer_advances", 0.0), "pv_explicit": pv_sum, "tv": tv, "pv_tv": pv_tv, "ev": ev, "equity": equity, "per_share": per_share,
             "shares": shares, "capital_actions": c.get("capital_actions") or [], "split_factor": c.get("split_factor"),
-            "tv_share": pv_tv / ev if ev else None, "tv_ev_ebit": tv / (nopat_next / (1 - tax[-1])), "wacc": wacc, "g": g, "ronic": ronic,
+            "tv_share": pv_tv / ev if ev else None, "tv_ev_ebit": tv / (rev_prev * (1 + g) * term_margin) if term_margin else None, "wacc": wacc, "g": g, "ronic": ronic,
             "capex_mode": capex_mode, "incremental": incremental, "margin_path": m, "terminal_ebit_margin": term_margin, "final_year_ebit_margin": final_margin}
 
 
 def dcf(c):
+    check_dcf(c)
     r = dcf_core(c)
-    if r is None:
-        sys.exit("terminal_growth must be below wacc")
+    if r["tv"] <= 0:
+        raise ValueError("terminal NOPAT and FCFF must be positive for a going-concern DCF")
     w, g = c["wacc"], c["terminal_growth"]
     step_w, step_g = c.get("wacc_step", 0.005), c.get("g_step", 0.005)
     ws = [w + step_w * k for k in (-2, -1, 0, 1, 2)]
@@ -207,12 +274,15 @@ def dcf(c):
     grid = [[(dcf_core(c, wacc=wi, g=gi) or {}).get("per_share") for gi in gs] for wi in ws]
     r["wacc_swing"] = [(dcf_core(c, wacc=w + d) or {}).get("per_share") for d in (-0.01, 0.01)]
     warn = []
+    rec = r["terminal_reinvestment_reconciliation"]
+    if rec and abs(rec["schedule_reinvestment"] - rec["ronic_reinvestment"]) > rec["threshold"] * abs(rec["nopat"]):
+        warn.append("Terminal reinvestment gap exceeds the threshold. Show terminal values under both RONIC and the capex schedule.")
     if r.get("capex_mode") and abs(r["terminal_ebit_margin"] - r["final_year_ebit_margin"]) > 0.01:
         warn.append(f"Final-year EBIT margin {pct(r['final_year_ebit_margin'])} vs steady-state {pct(r['terminal_ebit_margin'])} used for the terminal value — "
                     "D&A has not settled by the last explicit year (boom vintages still depreciating); the terminal value uses the steady state.")
     if g > 0.04:
         warn.append(f"Terminal growth {pct(g)} exceeds ~4% (long-run nominal GDP / risk-free) — justify or lower.")
-    if r["tv_share"] > 0.80:
+    if r["tv_share"] is not None and r["tv_share"] > 0.80:
         warn.append(f"Terminal value is {pct(r['tv_share'])} of EV — value rests on the steady state; extend the explicit period or stress the terminal margin.")
     if r["ronic"] > 0.35:
         warn.append(f"Terminal RONIC {pct(r['ronic'])} assumes a very durable moat; most companies fade toward WACC + a few points.")
@@ -265,6 +335,12 @@ def render_dcf(r, unit=""):
         o = ["## DCF", "", "| Yr | Revenue | Growth | EBIT margin | NOPAT | NOPAT/sh | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|---|"]
         for x in r["rows"]:
             o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['nopat_ps'], 2)} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+    rec = r.get("terminal_reinvestment_reconciliation")
+    if rec:
+        o += ["", "| Terminal method | Reinvestment | Terminal value | Value/share today |", "|---|---:|---:|---:|",
+              f"| Growth / RONIC | {money(rec['ronic_reinvestment'])} | {money(rec['ronic_tv'])} | {money(r['per_share'], 2)} |",
+              f"| Capex − D&A + ΔNWC | {money(rec['schedule_reinvestment'])} | {money(rec['schedule_tv'])} | {money(rec['schedule_per_share'], 2)} |",
+              f"Gap as a share of terminal NOPAT: {pct(rec['gap_fraction_of_nopat'])} (warning threshold {pct(rec['threshold'])})."]
     if r.get("incremental"):
         basis = "EBITDA" if r["capex_mode"] else "EBIT"
         cap = f", capped at {pct(r['margin_cap'])}" if r.get("margin_cap") is not None else ""
@@ -273,7 +349,7 @@ def render_dcf(r, unit=""):
     o.append("NOPAT/sh ≈ EPS before net interest and non-operating items, on the bridge share count — use it to compare with consensus EPS.")
     o += ["", "| Bridge | Value |", "|---|---|",
           f"| PV explicit FCFF | {money(r['pv_explicit'])} |",
-          f"| PV terminal value ({pct(r['tv_share'])} of EV; implied exit {r['tv_ev_ebit']:.1f}x EBIT) | {money(r['pv_tv'])} |",
+          f"| PV terminal value ({pct(r['tv_share'])} of EV; implied exit {money(r['tv_ev_ebit'], 1) or 'n/m'}x EBIT) | {money(r['pv_tv'])} |",
           f"| Enterprise value | {money(r['ev'])} |",
           *([f"| (−) Excess customer advances (debt-like float) | {money(r['excess_customer_advances'])} |"] if r.get("excess_customer_advances") else []),
           *action_lines(r["capital_actions"]),
@@ -285,7 +361,7 @@ def render_dcf(r, unit=""):
     if r.get("price"):
         o.append(f"| Price / upside | {money(r['price'], 2)} / {pct(r['upside'])} |")
     lo, hi = r["wacc_swing"]
-    if lo and hi:
+    if lo and hi and r["per_share"]:
         o.append(f"\nWACC swing: {money(lo, 2)} at {pct(r['wacc'] - 0.01)} · {money(r['per_share'], 2)} at {pct(r['wacc'])} · {money(hi, 2)} at {pct(r['wacc'] + 0.01)} "
                  f"(−1pt {pct(lo / r['per_share'] - 1)}, +1pt {pct(hi / r['per_share'] - 1)}). Put this line in the memo.")
     o += ["", f"Sensitivity — value/share (rows WACC, cols terminal g; centre = base, WACC {pct(r['wacc'])}, g {pct(r['g'])}, RONIC {pct(r['ronic'])}):", ""]
@@ -308,6 +384,7 @@ def render_dcf(r, unit=""):
 
 # ---------- reverse DCF ----------
 def reverse(c):
+    check_dcf(c)
     price, target = c["price"], c.get("solve", "growth")
 
     constant = c.get("growth_mode") == "constant"
@@ -380,10 +457,11 @@ def render_reverse(r):
 
 # ---------- SOTP ----------
 def sotp(c):
+    check_valuation_units(c)
     rows, total = [], 0.0
     for s in c["segments"]:
         v = s["value"] if "value" in s else s["metric"] * s["multiple"]
-        v *= s.get("probability", 1.0)
+        v *= probability(s.get("probability", 1.0), "segment probability")
         rows.append({**s, "ev": v})
         total += v
     disc = c.get("holdco_discount", 0.0)
@@ -418,32 +496,77 @@ def render_sotp(r):
 
 
 # ---------- scenarios ----------
+def price_linked_dcf(c, s, yrs):
+    fp = Path(c.get("_dir", ".")) / s["dcf"]
+    model = json.loads(fp.read_text())
+    check_dcf(model)
+    if not c.get("unit") or units(model)[0] != units(c)[0]:
+        raise ValueError("declare scenario unit with the same currency as the linked DCF")
+    if "as_of" in c and (date.fromisoformat(model["as_of"]) > date.fromisoformat(c["as_of"]) or model.get("ticker") != c["ticker"]):
+        raise ValueError("scenario DCF has a different issuer or later as_of")
+    audit = verify(model, fp.parent, c.get("_require_evidence", False) or "as_of" in c)
+    if audit:
+        s["dcf_evidence"] = audit
+    d = dcf_core(model)
+    if d["tv"] <= 0:
+        raise ValueError("linked DCF needs positive terminal FCFF")
+    s["value_today"] = d["per_share"]
+    if "horizon_bridge" in s:
+        hb = s["horizon_bridge"]
+        if not float(yrs).is_integer() or yrs > len(d["rows"]):
+            raise ValueError("horizon_bridge requires a whole year within the explicit DCF")
+        # End of year H, after that year's FCFF. Keep the underlying DCF timing convention.
+        remaining_pv = sum(row["pv"] for row in d["rows"] if row["year"] > yrs) + d["pv_tv"]
+        ev_h = remaining_pv * (1 + model["wacc"]) ** yrs
+        if units(c) != units(model) or units({**model, **hb}) != units(model):
+            raise ValueError("horizon bridge and DCF must use the same money and share scale")
+        number(hb["net_cash"], "horizon net_cash")
+        equity, shares = bridge(hb, ev_h)
+        s["fundamentals_based_target"] = equity / shares
+
+
 def scenarios(c):
     """Each scenario gives `value_today` (e.g. its DCF value) and/or `value` (per-share value at the
-    horizon). Missing one is derived by rolling at the cost of equity net of dividend yield:
+    horizon). A linked DCF plus a projected horizon_bridge values remaining cash flows at the horizon.
+    The required-return roll uses the cost of equity net of dividend yield:
     value = value_today x (1 + ke − dy)^years. Skew and the bear check use today's values."""
     sc = [dict(s) for s in c["scenarios"]]
-    for s in sc:  # "dcf": "dcf_bear.json" → value_today from that DCF input (path relative to this file)
-        if s.get("dcf"):
-            fp = os.path.join(c.get("_dir", "."), s["dcf"])
-            d = dcf_core(json.load(open(fp)))
-            if d is None:
-                sys.exit(f"{s['dcf']}: terminal_growth must be below wacc")
-            s["value_today"] = d["per_share"]
-    p = sum(s["prob"] for s in sc)
-    warn = [] if abs(p - 1) < 1e-6 else [f"Probabilities sum to {p:.2f}, not 1.00."]
-    price, yrs = c["price"], c.get("years", 3.0)
-    dy = c.get("dividend_yield", 0.0)
-    ke = c.get("cost_of_equity")
-    hurdle = c.get("hurdle", 0.15)
-    roll = (1 + ke - dy) ** yrs if ke is not None else None
+    total = sum(probability(s["prob"], "scenario probability") for s in sc)
+    if abs(total - 1) > 1e-6:
+        raise ValueError(f"scenario probabilities sum to {total:g}; expected 1")
+    warn = []
+    price, yrs = positive(c["price"], "price"), positive(c.get("years", 3), "years")
+    dy = probability(c.get("dividend_yield", 0.0), "dividend_yield")
+    ke = number(c["cost_of_equity"], "cost_of_equity") if "cost_of_equity" in c else None
+    hurdle = number(c.get("hurdle", 0.15), "hurdle")
+    roll = positive(1 + ke - dy, "roll-forward factor") ** yrs if ke is not None else None
     for s in sc:
-        if "value" not in s and "value_today" in s:
-            if roll is None:
-                sys.exit("cost_of_equity is required to roll value_today forward to the horizon")
-            s["value"] = s["value_today"] * roll
+        if "dcf" in s:
+            price_linked_dcf(c, s, yrs)
+        elif "horizon_bridge" in s:
+            raise ValueError("horizon_bridge requires a linked DCF")
+        rolled = s["value_today"] * roll if "value_today" in s and roll is not None else None
+        s["required_return_rolled_target"] = rolled
+        if "fundamentals_based_target" in s:
+            s["value"] = number(s["fundamentals_based_target"], "fundamentals_based_target")
+            s["target_basis"] = "fundamentals_based_target"
+        elif "value" in s:
+            s["target_basis"] = "supplied_horizon_value"
+        elif rolled is not None:
+            s["value"] = rolled
+            s["target_basis"] = "required_return_rolled_target"
+        else:
+            raise ValueError("scenario needs a horizon value or value_today and cost_of_equity")
+        if number(s["value"], "horizon value") < 0:
+            raise ValueError("scenario equity target must be nonnegative")
         if "value_today" not in s and roll is not None:
             s["value_today"] = s["value"] / roll
+
+    def weighted(key):
+        if all(s.get(key) is not None for s in sc):
+            return sum(s["prob"] * s[key] for s in sc)
+        return None
+
     ev = sum(s["prob"] * s["value"] for s in sc)
     irr = (ev / price) ** (1 / yrs) - 1 + dy
     have_today = all("value_today" in s for s in sc)
@@ -453,9 +576,9 @@ def scenarios(c):
     skew = (bull - price) / (price - bear) if (price > bear and bull > price) else None
     skew_note = None if skew is not None else ("price ≥ bull case" if bull <= price else "price ≤ bear case")
     buy_for_hurdle = ev / (1 + max(hurdle - dy, 0)) ** yrs
-    fv_today = c.get("fair_value_today") or (sum(s["prob"] * s["value_today"] for s in sc) if have_today else None)
+    fv_today = c.get("fair_value_today", weighted("value_today"))
     mos = c.get("margin_of_safety")
-    mos_price = fv_today * (1 - mos) if (fv_today and mos is not None) else None
+    mos_price = fv_today * (1 - probability(mos, "margin_of_safety")) if (fv_today is not None and mos is not None) else None
     action = min(x for x in (mos_price, buy_for_hurdle) if x is not None)
     if bear < price * 0.6:
         warn.append(f"Bear case ({'today' if have_today else 'horizon'} value) implies {pct(bear / price - 1)} — size the position for that loss, not the expected value.")
@@ -465,21 +588,25 @@ def scenarios(c):
         warn.append(f"Expected IRR {pct(irr)} is below the cost of equity {pct(ke)} — expected value-destroying at this price.")
     if not have_today:
         warn.append("No value_today per scenario (or cost_of_equity): skew/bear use horizon values, which understate downside vs today's price.")
-    return {"rows": sc, "expected_value": ev, "expected_return": ev / price - 1, "irr": irr, "skew": skew, "skew_note": skew_note, "skew_basis": basis, "years": yrs,
+    return {"required_return_rolled_target": weighted("required_return_rolled_target"),
+            "fundamentals_based_target": weighted("fundamentals_based_target"),
+            "rows": sc, "expected_value": ev, "expected_return": ev / price - 1, "irr": irr, "skew": skew, "skew_note": skew_note, "skew_basis": basis, "years": yrs,
             "price": price, "buy_for_hurdle": buy_for_hurdle, "hurdle": hurdle, "fair_value_today": fv_today, "mos_price": mos_price,
             "mos": mos, "action_price": action, "warnings": warn, "split_factor": c.get("split_factor")}
 
 
 def render_scen(r):
-    o = ["## Scenarios", "", "| Scenario | Prob | Value today | Value at horizon | Horizon vs price | Key assumptions |", "|---|---|---|---|---|---|"]
+    o = ["## Scenarios", "", "| Scenario | Prob | Value today | Value at horizon | Target basis | Horizon vs price | Key assumptions |", "|---|---|---|---|---|---|---|"]
     for s in r["rows"]:
-        o.append(f"| {s['name']} | {pct(s['prob'], 0)} | {money(s.get('value_today'), 2)} | {money(s['value'], 2)} | {pct(s['value'] / r['price'] - 1)} | {s.get('assumptions', '')} |")
-    o.append(f"| **Probability-weighted** | | **{money(r['fair_value_today'], 2)}** | **{money(r['expected_value'], 2)}** | **{pct(r['expected_return'])}** | horizon {r['years']:g} yr |")
+        o.append(f"| {s['name']} | {pct(s['prob'], 0)} | {money(s.get('value_today'), 2)} | {money(s['value'], 2)} | {s['target_basis']} | {pct(s['value'] / r['price'] - 1)} | {s.get('assumptions', '')} |")
+    o.append(f"| **Probability-weighted** | | **{money(r['fair_value_today'], 2)}** | **{money(r['expected_value'], 2)}** | | **{pct(r['expected_return'])}** | horizon {r['years']:g} yr |")
     o += ["", f"- Target price (prob-weighted, {r['years']:g}-yr horizon): **{money(r['expected_value'], 2)}**",
           f"- Expected IRR: **{pct(r['irr'])}** (hurdle {pct(r['hurdle'])})",
           f"- Upside/downside skew ({r['skew_basis']} basis): {('%.1f:1' % r['skew']) if r['skew'] is not None else 'n/a (' + r['skew_note'] + ')'}",
           f"- Max price that still earns the hurdle: {money(r['buy_for_hurdle'], 2)}"]
-    if r["mos_price"]:
+    for key, label in (("fundamentals_based_target", "Fundamentals-based target"), ("required_return_rolled_target", "Required-return rolled target")):
+        o.append(f"- {label} (probability-weighted): {money(r[key], 2) if r[key] is not None else 'unavailable'}")
+    if r["mos_price"] is not None:
         o.append(f"- Fair value today x (1 − {pct(r['mos'], 0)} MOS): {money(r['mos_price'], 2)}")
     o.append(f"- **Action price for the memo header (lower of the two): {money(r['action_price'], 2)}**")
     if r.get("split_factor"):
@@ -498,11 +625,12 @@ POS = {"preclinical": 0.05, "phase1": 0.079, "phase2": 0.151, "phase3": 0.524, "
 
 
 def rnpv(c):
+    check_valuation_units(c)
     r = c.get("discount_rate", 0.10)
     tax = c.get("tax_rate", 0.15)
     rows, total = [], 0.0
     for a in c["assets"]:
-        pos = a.get("pos", POS[a["phase"]])
+        pos = probability(a.get("pos", POS[a["phase"]]), "probability of success")
         launch, peak = a["launch_year"], a["peak_sales"]
         ytp = a.get("years_to_peak", 5)
         loe = a.get("loe_year", launch + 12)
@@ -535,7 +663,7 @@ def rnpv(c):
         rows.append({"name": a["name"], "phase": a["phase"], "pos": pos, "pv_unrisked": pv_cf, "pv_dev": pv_dev, "rnpv": val})
         total += val
     equity = total + c.get("net_cash", 0.0) - c.get("other_claims", 0.0) - c.get("pv_corporate_costs", 0.0)
-    shares = c["diluted_shares"] * (1 + c.get("expected_dilution", 0.0))
+    shares = positive(c["diluted_shares"], "diluted_shares") * positive(1 + c.get("expected_dilution", 0.0), "dilution factor")
     res = {"rows": rows, "pipeline": total, "equity": equity, "per_share": equity / shares, "discount_rate": r}
     if c.get("price"):
         res["price"], res["upside"] = c["price"], res["per_share"] / c["price"] - 1
@@ -598,10 +726,23 @@ def main():
     if len(sys.argv) < 3 or sys.argv[1] not in CMDS:
         sys.exit(__doc__)
     fn, rend = CMDS[sys.argv[1]]
-    cfg = json.load(open(sys.argv[2]))
-    cfg["_dir"] = os.path.dirname(os.path.abspath(sys.argv[2]))
-    res = fn(cfg)
-    print(json.dumps(res, indent=1, default=float) if "--json" in sys.argv else rend(res))
+    try:
+        source = Path(sys.argv[2])
+        cfg = json.loads(source.read_text())
+        units(cfg)
+        audit = verify(cfg, source.parent, "--require-evidence" in sys.argv)
+        cfg["_dir"] = str(source.parent)
+        cfg["_require_evidence"] = "--require-evidence" in sys.argv
+        for key in ("split_factor", "price"):
+            if key in cfg:
+                positive(cfg[key], key)
+        res = fn(cfg)
+        if audit:
+            res["evidence"] = audit
+        print(json.dumps(res, indent=1, allow_nan=False) if "--json" in sys.argv else rend(res))
+    except (ValueError, OSError, KeyError, TypeError, IndexError, AttributeError, ArithmeticError) as exc:
+        print(f"Invalid input: {exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
