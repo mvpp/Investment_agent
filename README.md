@@ -17,7 +17,7 @@ Claude Code (any project), via this repo as a plugin marketplace:
 /plugin install investment-memo-bundle@investment-agent
 ```
 Or for a single session: `claude --plugin-dir /path/to/Investment_agent`.
-Or copy/symlink the four folders in `skills/` into `~/.claude/skills/`. Keep them together — the memo skill calls its siblings by relative path.
+Or copy/symlink the four folders in `skills/` into `~/.claude/skills/` (or `~/.gemini/antigravity/skills/`). In Antigravity, opening this repo directly loads all four skills via `.agents/skills`. Keep them together — the memo skill calls its siblings by relative path.
 
 The agent reads filings itself from SEC EDGAR with web fetch (no API key needed). The calculators validate saved filing extracts offline. The memo workflow uses dated evidence manifests for reported inputs and records the assumptions behind estimates. [Evidence format and TTM input](skills/earnings-normalization/references/evidence.md)
 
@@ -31,6 +31,8 @@ The agent reads filings itself from SEC EDGAR with web fetch (no API key needed)
 
 Calculators run standalone too:
 ```
+python3 skills/earnings-normalization/scripts/evidence.py --inspect skills/earnings-normalization/examples/meta-q3-2025/exhibit-99-1-extract.txt
+python3 skills/earnings-normalization/scripts/evidence.py --scaffold skills/earnings-normalization/examples/core_eps_input.json --extract skills/earnings-normalization/examples/meta-q3-2025/exhibit-99-1-extract.txt
 python3 skills/earnings-normalization/scripts/core_eps.py skills/earnings-normalization/examples/core_eps_input.json --require-evidence
 python3 skills/sector-valuation/scripts/valuation.py dcf skills/sector-valuation/examples/dcf.json
 python3 skills/investment-memo/scripts/memo_check.py memos/META_2026-11-17.md

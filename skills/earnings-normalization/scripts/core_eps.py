@@ -228,17 +228,24 @@ def ttm(cfg, directory, require_evidence):
     agg = {}
     for basis in ("gaap", "core"):
         agg[basis] = {k: sum(r[basis][k] for r in results)
-                      for k in ("eps", "earnings_to_common", "revenue", "operating_income")}
+                      for k in ("eps", "earnings_to_common", "revenue", "operating_income", "pretax_income", "tax_expense")}
         if basis == "gaap":
             agg[basis]["eps"] = agg[basis]["reported_eps"] = sum(r[basis]["reported_eps"] for r in results)
         revenue = agg[basis]["revenue"]
+        pretax = agg[basis]["pretax_income"]
         agg[basis]["op_margin"] = agg[basis]["operating_income"] / revenue if revenue else None
+        agg[basis]["etr"] = agg[basis]["tax_expense"] / pretax if pretax else None
     if all("cash" in r for r in results):
         cash = {k: sum(r["cash"][k] for r in results)
                 for k in ("reported_fcf", "core_cfo", "core_fcf", "core_fcf_after_sbc")}
         ni = agg["core"]["earnings_to_common"]
         cash["conversion"] = cash["core_fcf_after_sbc"] / ni if ni else None
         cash["fcf_after_sbc_per_share"] = sum(r["cash"]["fcf_after_sbc_per_share"] for r in results)
+        cash["fcf_after_sbc_per_valuation_share"] = cash["core_fcf_after_sbc"] / shares
+        if all("owner_earnings" in r["cash"] for r in results):
+            cash["owner_earnings"] = sum(r["cash"]["owner_earnings"] for r in results)
+            cash["owner_earnings_per_share"] = sum(r["cash"]["owner_earnings_per_share"] for r in results)
+            cash["growth_capex"] = sum(r["cash"]["growth_capex"] for r in results)
         agg["cash"] = cash
     if require_evidence or "as_of" in cfg or "evidence" in cfg:
         # Quarter facts retain their own fiscal dates. The outer fact is the valuation denominator.
@@ -449,9 +456,11 @@ def quarter(cfg):
 
     res = {
         "company": cfg.get("company"), "period": cfg.get("period"), "unit": cfg.get("unit", ""), "sector": sector,
-        "gaap": {"revenue": g["revenue"], "operating_income": g["operating_income"], "earnings_to_common": e2c, "eps": gaap_eps,
+        "gaap": {"revenue": g["revenue"], "operating_income": g["operating_income"], "pretax_income": g["pretax_income"],
+                 "tax_expense": g["tax_expense"], "earnings_to_common": e2c, "eps": gaap_eps,
                  "reported_eps": g["reported_diluted_eps"], "etr": gaap_etr, "op_margin": g["operating_income"] / g["revenue"] if g["revenue"] else None, "shares": shares},
-        "core": {"revenue": core_rev, "operating_income": core_op, "earnings_to_common": core_ni, "eps": core_eps, "etr": core_etr,
+        "core": {"revenue": core_rev, "operating_income": core_op, "pretax_income": core_pretax,
+                 "tax_expense": core_tax, "earnings_to_common": core_ni, "eps": core_eps, "etr": core_etr,
                  "op_margin": core_op / core_rev if core_rev else None, "shares": core_shares},
         "nci_adjustment": nci_effect, "nci_by_event": allocations,
         "core_ex_investment_eps": supplemental_eps(core_ni + invest_after, "Ex-investment") if invest_after else None,
@@ -504,10 +513,13 @@ def render(r):
         for q in r["quarters"]:
             out.append(f"| {q['period']} | {q['gaap']['reported_eps']:.2f} | {q['core']['eps']:.4f} | {q['core']['earnings_to_common']:,.2f} | {q['core']['shares']:,.2f} |")
         out += [f"| TTM | {r['gaap']['reported_eps']:.2f} | {r['core']['eps']:.2f} | {r['core']['earnings_to_common']:,.2f} | |",
-                f"Valuation shares: {r['valuation_shares']:,.2f}"]
-        out += [f"Core revenue: {r['core']['revenue']:,.2f} · Core operating margin: {pct(r['core']['op_margin'])}"]
+                f"Valuation shares: {r['valuation_shares']:,.2f}",
+                f"GAAP revenue: {r['gaap']['revenue']:,.2f} · GAAP operating margin: {pct(r['gaap']['op_margin'])} · GAAP ETR: {pct(r['gaap']['etr'])}",
+                f"Core revenue: {r['core']['revenue']:,.2f} · Core operating margin: {pct(r['core']['op_margin'])} · Core ETR: {pct(r['core']['etr'])}"]
         if "cash" in r:
-            out.append(f"Core FCF after SBC: {r['cash']['core_fcf_after_sbc']:,.2f} · Cash conversion: {pct(r['cash']['conversion'])}")
+            c = r["cash"]
+            out.append(f"Core FCF after SBC: {c['core_fcf_after_sbc']:,.2f} · FCF after SBC / share: {c['fcf_after_sbc_per_share']:,.2f} "
+                       f"(on valuation shares: {c['fcf_after_sbc_per_valuation_share']:,.2f}) · Cash conversion: {pct(c['conversion'])}")
         return "\n".join(out + [f"- {w}" for w in r["warnings"]])
     u = r["unit"]
     AMT_DP = 1 if abs(r["gaap"]["earnings_to_common"]) < 1000 else 0

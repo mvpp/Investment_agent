@@ -1,11 +1,27 @@
-"""Offline checks for dated calculator facts bound to local filing extracts."""
+"""Offline checks and CLI helpers for dated calculator facts bound to local filing extracts.
+
+Usage:
+  python3 evidence.py --inspect <extract.txt> [--json]
+  python3 evidence.py --scaffold <input.json> [--extract <extract.txt>] [--doc-id release]
+"""
 from datetime import date
 import hashlib
 import json
 import math
 from pathlib import Path
 import re
+import sys
 from urllib.parse import urlsplit
+
+TOKEN_RX = r"\(\s*\$?\s*-?\d[\d,]*(?:\.\d+)?\s*\)|-\s*\$\s*\d[\d,]*(?:\.\d+)?|-?\d[\d,]*(?:\.\d+)?|[—–]"
+
+
+def parse_token(token):
+    if token in ("—", "–"):
+        return 0.0
+    neg = (token.startswith("(") and token.endswith(")")) or "-" in token
+    digits = re.sub(r"[^0-9.]", "", token)
+    return -float(digits) if neg else float(digits)
 
 
 def number(value, label):
@@ -152,7 +168,7 @@ def verify_reported(path, value, fact, ticker, dates, documents, snapshots, dire
     label = fact["source_location"]
     if not label.strip() or not row.startswith(label):
         raise ValueError(f"{path} source row label differs")
-    tokens = re.findall(r"\(?-?\d[\d,]*(?:\.\d+)?\)?|[—–]", row[len(label):])
+    tokens = re.findall(TOKEN_RX, row[len(label):])
     col = fact["column"]
     if type(col) != int or not 1 <= col <= len(tokens):
         raise ValueError(f"{path} invalid source column")
@@ -164,10 +180,128 @@ def verify_reported(path, value, fact, ticker, dates, documents, snapshots, dire
         raise ValueError(f"{path} differs from bridge period")
     if doc["column_periods"].get(str(col)) != fiscal_period:
         raise ValueError(f"{path} source column differs from fiscal period")
-    token = tokens[col - 1].replace(",", "").replace("(", "-").replace(")", "")
-    observed = 0 if token in ("—", "–") else float(token)
+    observed = parse_token(tokens[col - 1])
     factor = number(fact.get("factor", 1), "source unit/sign factor")
     if factor not in (1, -1, 1000, -1000, .001, -.001, 1e6, -1e6, 1e-6, -1e-6, .01, -.01, 100, -100):
         raise ValueError(f"{path} unsupported source unit/sign factor")
     if not math.isclose(observed * factor, value, rel_tol=1e-12, abs_tol=1e-12):
         raise ValueError(f"{path} differs from filing row and column")
+
+
+def inspect_extract(extract_path):
+    fp = Path(extract_path)
+    raw = fp.read_bytes()
+    sha = hashlib.sha256(raw).hexdigest()
+    rows = []
+    for line_no, raw_line in enumerate(raw.decode().splitlines(), 1):
+        row = raw_line.strip()
+        if not row:
+            continue
+        m = re.search(TOKEN_RX, row)
+        if not m:
+            rows.append({"line": line_no, "source_location": row, "columns": []})
+            continue
+        label = row[:m.start()].rstrip(" \t$")
+        tail = row[len(label):] if label else row
+        toks = re.findall(TOKEN_RX, tail)
+        cols = [{"column": i, "raw": t, "value": parse_token(t)} for i, t in enumerate(toks, 1)]
+        rows.append({"line": line_no, "source_location": label, "columns": cols})
+    return {"snapshot": fp.name, "sha256": sha, "lines": rows}
+
+
+def default_unit_for(path, currency, scale):
+    exp = expected_unit(path, currency, scale)
+    if exp:
+        return exp
+    if path.endswith(("/quarters_reviewed", "/similar_events")):
+        return "count"
+    if path.endswith(("/years", "/launch_year", "/years_to_peak", "/loe_year", "/asset_life", "/in_service_lag", "/max_years", "/life")):
+        return "years"
+    return "ratio"
+
+
+def scaffold_manifest(cfg, extract_info=None, doc_id="release"):
+    currency, scale = units(cfg)
+    period_start = cfg.get("period_start", "YYYY-MM-DD")
+    period_end = cfg.get("period_end", "YYYY-MM-DD")
+    as_of = cfg.get("as_of", period_end)
+    doc = {
+        "ticker": cfg.get("ticker", ""),
+        "form": "10-Q",
+        "accession": "0000000000-00-000000",
+        "filing_date": as_of,
+        "source_url": "https://www.sec.gov/Archives/edgar/data/...",
+        "snapshot": extract_info["snapshot"] if extract_info else "extract.txt",
+        "sha256": extract_info["sha256"] if extract_info else "TODO",
+        "column_periods": {"1": [period_start, period_end]},
+    }
+    col1_matches = {}
+    if extract_info:
+        for r in extract_info["lines"]:
+            if r["source_location"] and r["columns"]:
+                v = r["columns"][0]["value"]
+                for factor in (1, -1):
+                    col1_matches.setdefault(v * factor, []).append((r["line"], r["source_location"], factor))
+    facts = {}
+    for path, val in numeric_fields(cfg):
+        unit = default_unit_for(path, currency, scale)
+        parts = path.strip("/").split("/")
+        eid = cfg[parts[0]][int(parts[1])].get("event_id") if parts[0] in ("adjustments", "revenue_adjustments") else None
+        is_reported_candidate = (
+            (path.startswith("/gaap/") and not path.startswith("/gaap/core_"))
+            or (path.startswith("/cash/") and not path.endswith("/maintenance_capex"))
+            or (parts[0] in ("adjustments", "revenue_adjustments") and parts[-1] in ("pretax", "after_tax", "amount", "tax_effect", "gross_tax_effect"))
+        )
+        matches = col1_matches.get(float(val), []) if extract_info else []
+        if is_reported_candidate and (not extract_info or len(matches) == 1):
+            line_no, loc, factor = matches[0] if len(matches) == 1 else (1, "TODO", 1)
+            entry = {
+                "value": val, "unit": unit, "evidence_type": "reported", "confidence": "high",
+                "document": doc_id, "line": line_no, "column": 1, "source_location": loc,
+            }
+            if factor != 1:
+                entry["factor"] = factor
+        else:
+            entry = {
+                "value": val, "unit": unit, "evidence_type": "estimate", "confidence": "medium",
+                "method": "TODO: document derivation or switch to reported", "estimate_date": as_of,
+            }
+        if eid:
+            entry["event_id"] = eid
+        facts[path] = entry
+    return {
+        "ticker": cfg.get("ticker", ""),
+        "period_start": period_start,
+        "period_end": period_end,
+        "documents": {doc_id: doc},
+        "facts": facts,
+    }
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] not in ("--inspect", "--scaffold"):
+        sys.exit(__doc__.strip())
+    if args[0] == "--inspect":
+        if len(args) < 2:
+            sys.exit("Usage: python3 evidence.py --inspect <extract.txt> [--json]")
+        info = inspect_extract(args[1])
+        if "--json" in args:
+            print(json.dumps(info, indent=2))
+        else:
+            print(f"snapshot: {info['snapshot']}\nsha256:   {info['sha256']}\n")
+            for r in info["lines"]:
+                cols = ", ".join(f"col {c['column']}={c['value']:g}" for c in r["columns"])
+                loc = f'"{r["source_location"]}"' if r["source_location"] else "(no leading label)"
+                print(f"L{r['line']:>3}: {loc}" + (f" -> [{cols}]" if cols else ""))
+    elif args[0] == "--scaffold":
+        if len(args) < 2:
+            sys.exit("Usage: python3 evidence.py --scaffold <input.json> [--extract <extract.txt>] [--doc-id release]")
+        cfg = json.loads(Path(args[1]).read_text())
+        ext = inspect_extract(args[args.index("--extract") + 1]) if "--extract" in args else None
+        doc_id = args[args.index("--doc-id") + 1] if "--doc-id" in args else "release"
+        print(json.dumps(scaffold_manifest(cfg, ext, doc_id), indent=2))
+
+
+if __name__ == "__main__":
+    main()

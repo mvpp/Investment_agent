@@ -93,16 +93,57 @@ class CalculatorTests(unittest.TestCase):
     def test_ttm_changing_shares(self):
         starts = ["2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01"]
         ends = ["2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31"]
-        quarters = [dict(quarter(shares=shares), period_start=start, period_end=end)
+        quarters = [dict(quarter(shares=shares), period_start=start, period_end=end,
+                         cash={"cfo": 150, "capex": 40, "finance_lease_principal": 10, "sbc": 20})
                     for start, end, shares in zip(starts, ends, [100, 100, 200, 200])]
         cfg = {"period": "TTM", "ticker": "DEMO", "unit": "USD M", "valuation_shares": 230, "quarters": quarters}
         out = self.calc(None, cfg)
         self.assertEqual(out["core"]["eps"], 3)
         self.assertEqual(out["core"]["earnings_to_common"], 400)
         self.assertEqual(out["valuation_shares"], 230)
+        self.assertAlmostEqual(out["gaap"]["etr"], 160 / 720)
+        self.assertAlmostEqual(out["core"]["etr"], 160 / 720)
+        self.assertAlmostEqual(out["cash"]["fcf_after_sbc_per_share"], 80 / 100 * 2 + 80 / 200 * 2)
+        self.assertAlmostEqual(out["cash"]["fcf_after_sbc_per_valuation_share"], 320 / 230)
+        md = run(CORE, self.write(cfg)).stdout
+        self.assertIn("Core ETR: 22.2%", md)
+        self.assertIn("FCF after SBC / share: 2.40", md)
         quarters[0] = quarters[1]
         self.assertIn("consecutive", self.calc(None, cfg, False))
         self.calc(None, dict(quarter(), period="TTM"), False)
+
+    def test_evidence_dollar_parentheses_and_cli(self):
+        import hashlib
+        cfg = self.meta()
+        manifest_path = self.dir / cfg["evidence"]
+        extract_path = manifest_path.parent / "exhibit-99-1-extract.txt"
+        raw_text = extract_path.read_text()
+        for fmt in ["($18,829)", "$(18,829)", "-$18,829"]:
+            with self.subTest(fmt=fmt):
+                modified = raw_text.replace("(18,829)", fmt)
+                extract_path.write_text(modified)
+                manifest = read(manifest_path)
+                manifest["documents"]["release"]["sha256"] = hashlib.sha256(modified.encode()).hexdigest()
+                manifest_path.write_text(json.dumps(manifest))
+                actual = self.calc(None, cfg, True, "--require-evidence")
+                self.assertEqual(actual["cash"]["reported_fcf"], 10625)
+        extract_path.write_text(raw_text)
+        ev_script = EARN / "scripts/evidence.py"
+        insp = run(ev_script, "--inspect", extract_path, "--json")
+        self.assertEqual(insp.returncode, 0, insp.stderr)
+        insp_data = json.loads(insp.stdout)
+        self.assertEqual(insp_data["snapshot"], "exhibit-99-1-extract.txt")
+        scaf = run(ev_script, "--scaffold", EARN / "examples/core_eps_input.json", "--extract", extract_path)
+        self.assertEqual(scaf.returncode, 0, scaf.stderr)
+        scaf_data = json.loads(scaf.stdout)
+        self.assertEqual(scaf_data["facts"]["/gaap/revenue"]["line"], 10)
+        self.assertEqual(scaf_data["facts"]["/cash/capex"]["factor"], -1)
+        self.assertEqual(scaf_data["facts"]["/adjustments/2/pretax"]["event_id"], "2025Q3-RL-loss")
+
+    def test_agents_skills_symlink(self):
+        agents_skills = ROOT.parent / ".agents/skills"
+        for name in ("earnings-normalization", "sector-valuation", "investment-memo", "us-industry-deepdive"):
+            self.assertTrue((agents_skills / name / "SKILL.md").is_file(), f"missing {name}/SKILL.md via .agents/skills")
 
     def test_revenue_and_nci(self):
         cfg = quarter()

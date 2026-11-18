@@ -30,14 +30,14 @@ As of YYYY-MM-DD · Price $X · Mkt cap $XB · EV $XB · **Rating: BUY / AVOID (
 
 ## 2. Valuation Snapshot  (table only)
 
-| Scenario | Prob | Key assumptions (KPI levels) | Value/share | vs price |
-|---|---|---|---|---|
-| Bear | | | | |
-| Base | | | | |
-| Bull | | | | |
-| **Prob-weighted** | | horizon <n> yr | **$X** | **+Y%** |
+| Scenario | Prob | Key assumptions (KPI levels) | Value today | Value at horizon | Horizon vs price |
+|---|---|---|---|---|---|
+| Bear | | | | | |
+| Base | | | | | |
+| Bull | | | | | |
+| **Prob-weighted** | | horizon <n> yr (<target basis>) | **$X** | **$X** | **+Y%** |
 
-Method: <primary + why it fits this business model>. Reverse DCF: price implies <X>; our base case <Y>. Margin of safety <Z%> (quality <grade>) → action price $X.
+Method: <primary + why it fits this business model>. Reverse DCF: price implies <X>; our base case <Y>. Skew is measured on today's values (`(Bull today − Price) / (Price − Bear today)`). Margin of safety <Z%> (quality <grade>) → action price $X.
 
 ## 3. Business & Competitive Position  (≤380 words + 2 tables)
 
@@ -60,8 +60,9 @@ Method: <primary + why it fits this business model>. Reverse DCF: price implies 
 | (TTM, $M) | GAAP | Adjustments (class · source) | Core |
 |---|---|---|---|
 | Revenue | | | |
-| Operating income | | | |
-| Net income | | | |
+| Operating income (margin) | | | |
+| Effective tax rate | | | |
+| Earnings to common | | | |
 | Diluted EPS | | | **$X** |
 | FCF after SBC / share | | | |
 
