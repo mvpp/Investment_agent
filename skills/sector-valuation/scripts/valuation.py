@@ -2,9 +2,10 @@
 """Deterministic valuation math so the memo never relies on mental arithmetic.
 
 Subcommands (each takes a JSON file; see ../examples/*.json):
-  dcf        FCFF DCF with growth/margin fade; reinvestment via capex/D&A vintages (models
-             the depreciation wave of a capex boom), sales-to-capital (scalar or path) or a
-             reinvestment-rate path; value-consistent terminal value (g / RONIC); 5x5 sensitivity.
+  dcf        FCFF DCF with growth/margin fade (or margins built from an incremental margin on
+             new revenue); reinvestment via capex/D&A vintages (models the depreciation wave of a
+             capex boom), sales-to-capital (scalar or path) or a reinvestment-rate path;
+             value-consistent terminal value (g / RONIC); 5x5 sensitivity.
   reverse    Reverse DCF: solve the revenue growth (whole path scaled, shape kept) or the
              terminal margin the current price implies, holding the rest of the dcf inputs fixed.
   sotp       Sum-of-the-parts: segment metric x multiple (or explicit value), bridge to per share.
@@ -77,6 +78,24 @@ def steady_da_ratio(cls, lag, g):
     return sum(sh * sum((1 + g) ** -k for k in range(lag, lag + life)) / life for sh, life in cls)
 
 
+def incremental_path(c, gr, n):
+    """Average-margin path from a base margin plus an incremental margin on each year's new revenue:
+    profit_t = profit_{t-1} + incremental_t x (rev_t - rev_{t-1}), optionally capped at margin_cap x rev_t."""
+    inc = path(c["incremental_margin"], n, "incremental_margin")
+    cap = c.get("margin_cap")
+    rev_prev = c["revenue0"]
+    profit = c["margin0"] * rev_prev
+    out = []
+    for t in range(n):
+        rev = rev_prev * (1 + gr[t])
+        profit += inc[t] * (rev - rev_prev)
+        if cap is not None:
+            profit = min(profit, cap * rev)
+        out.append(profit / rev)
+        rev_prev = rev
+    return out
+
+
 def bridge(c, ev):
     acts = c.get("capital_actions") or []
     equity = (ev + c.get("net_cash", 0.0) + c.get("investments", 0.0) - c.get("other_claims", 0.0)
@@ -106,12 +125,17 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
                        "final_year" restores the old behaviour).
       sales_to_capital (scalar or path): reinvestment = Δrevenue / S2C.
       reinvestment_rate (path): reinvestment = NOPAT × rate (growth is then 'free' — avoid for reverse growth).
+    Margins (any mode): a path in ebit_margin (ebitda_margin in capex mode), OR incremental_margin
+      (scalar/path, on each year's new revenue) + margin0 (base-year margin, same basis) [+ margin_cap,
+      the steady-state ceiling]. Incremental mode re-derives margins from the revenue path, so faster
+      growth lifts margins (operating leverage) — including in the reverse-DCF growth solve.
     """
     n = c["years"]
     gr = [x * growth_scale + growth_shift for x in path(growth if growth is not None else c["growth"], n, "growth")]
     capex_mode = "capex_pct" in c
     mkey = "ebitda_margin" if capex_mode else "ebit_margin"
-    m = path(c[mkey], n, mkey)
+    incremental = c.get("incremental_margin") is not None
+    m = incremental_path(c, gr, n) if incremental else path(c[mkey], n, mkey)
     if margin_end is not None:
         m = shift_to_end(m, margin_end)
     tax = path(c.get("tax_rate", 0.21), n, "tax_rate")
@@ -169,7 +193,7 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
     return {"rows": rows, "excess_customer_advances": c.get("excess_customer_advances", 0.0), "pv_explicit": pv_sum, "tv": tv, "pv_tv": pv_tv, "ev": ev, "equity": equity, "per_share": per_share,
             "shares": shares, "capital_actions": c.get("capital_actions") or [], "split_factor": c.get("split_factor"),
             "tv_share": pv_tv / ev if ev else None, "tv_ev_ebit": tv / (nopat_next / (1 - tax[-1])), "wacc": wacc, "g": g, "ronic": ronic,
-            "capex_mode": capex_mode, "terminal_ebit_margin": term_margin, "final_year_ebit_margin": final_margin}
+            "capex_mode": capex_mode, "incremental": incremental, "margin_path": m, "terminal_ebit_margin": term_margin, "final_year_ebit_margin": final_margin}
 
 
 def dcf(c):
@@ -196,13 +220,23 @@ def dcf(c):
         warn.append("Capex runs below D&A in the final explicit years and the terminal value uses that year's D&A — negative net reinvestment flatters the terminal FCFF; use terminal_da steady_state or extend the horizon.")
     if not r.get("capex_mode") and c.get("sales_to_capital") is not None and any(row["growth"] < 0 for row in r["rows"]):
         warn.append("Revenue declines while reinvestment is sales-to-capital: a decline is treated as capital RELEASED (cash in). For advance-funded businesses (customer prepayments) a decline CONSUMES cash — use capex mode with a negative nwc_pct, or deduct excess_customer_advances.")
+    if r["incremental"]:
+        basis = "EBITDA" if r["capex_mode"] else "EBIT"
+        if c.get("margin_cap") is None:
+            warn.append(f"incremental_margin without margin_cap: the average {basis} margin keeps converging toward the incremental margin "
+                        f"(final year {pct(r['margin_path'][-1])}). Set margin_cap at a steady state supported by peers at scale.")
+        if any(row["growth"] < 0 for row in r["rows"]):
+            warn.append("Revenue declines in incremental mode remove profit at the same incremental margin — check that the cost base is that flexible.")
     if any(row["fcff"] < 0 for row in r["rows"][-2:]):
         warn.append("FCFF still negative in the final explicit years — the terminal year is not steady state; extend the horizon.")
+    if r["incremental"]:
+        im = c["incremental_margin"]
+        r["inc_label"] = pct(im) if isinstance(im, (int, float)) else (f"{pct(im['start'])}→{pct(im['end'])}" if isinstance(im, dict) else "path")
+        r["margin_cap"] = c.get("margin_cap")
     r.update({"grid": grid, "grid_w": ws, "grid_g": gs, "warnings": warn, "price": c.get("price")})
     if c.get("margin_grid", True):
         # second grid: final-year margin (path shifted, shape kept) x WACC — usually the two inputs that matter most
-        mkey = "ebitda_margin" if r.get("capex_mode") else "ebit_margin"
-        m_end = path(c[mkey], c["years"], mkey)[-1]
+        m_end = r["margin_path"][-1]
         step = c.get("margin_step", 0.02)
         ends = [m_end + step * k for k in (-2, -1, 0, 1, 2)]
         r["mgrid"] = [[(dcf_core(c, margin_end=me, wacc=wi) or {}).get("per_share") for me in ends] for wi in ws]
@@ -231,6 +265,11 @@ def render_dcf(r, unit=""):
         o = ["## DCF", "", "| Yr | Revenue | Growth | EBIT margin | NOPAT | NOPAT/sh | Reinvest | FCFF | PV |", "|---|---|---|---|---|---|---|---|---|"]
         for x in r["rows"]:
             o.append(f"| {x['year']} | {money(x['revenue'])} | {pct(x['growth'])} | {pct(x['margin'])} | {money(x['nopat'])} | {money(x['nopat_ps'], 2)} | {money(x['reinvestment'])} | {money(x['fcff'])} | {money(x['pv'])} |")
+    if r.get("incremental"):
+        basis = "EBITDA" if r["capex_mode"] else "EBIT"
+        cap = f", capped at {pct(r['margin_cap'])}" if r.get("margin_cap") is not None else ""
+        o.append(f"\n{basis} margin path built from incremental margin {r['inc_label']} on new revenue{cap}: "
+                 f"year 1 {pct(r['margin_path'][0])} → final year {pct(r['margin_path'][-1])}.")
     o.append("NOPAT/sh ≈ EPS before net interest and non-operating items, on the bridge share count — use it to compare with consensus EPS.")
     o += ["", "| Bridge | Value |", "|---|---|",
           f"| PV explicit FCFF | {money(r['pv_explicit'])} |",
@@ -310,6 +349,7 @@ def reverse(c):
         for v in base_path:
             bfin *= 1 + v
         out.update({"implied_final_revenue": fin, "implied_cagr": (fin / c["revenue0"]) ** (1 / n) - 1, "base_cagr": (bfin / c["revenue0"]) ** (1 / n) - 1,
+                    "incremental": c.get("incremental_margin") is not None,
                     "adj": x, "mode": "constant" if constant else ("scale" if scale else "shift"), "path_first": ipath[0], "path_last": ipath[-1]})
         if "capex_pct" not in c and c.get("sales_to_capital") is None:
             out["warnings"].append("reinvestment_rate mode: extra growth needs no extra capital here, so the implied CAGR is biased LOW. Re-run with sales_to_capital or capex mode for the growth solve.")
@@ -329,7 +369,9 @@ def render_reverse(r):
                "shift": f"your growth path shifted {r['adj'] * 100:+.1f}pts every year"}[r["mode"]]
         how += f": year 1 {pct(r['path_first'])}, final year {pct(r['path_last'])}" if r["mode"] != "constant" else ""
         txt = (f"## Reverse DCF\n\nAt {money(r['price'], 2)}/share the market implies a **{pct(r['implied_cagr'])} revenue CAGR** over the explicit period "
-               f"vs {pct(r['base_cagr'])} in your base case ({how}; final-year revenue {money(r['implied_final_revenue'])}), holding the margin path, reinvestment, WACC and terminal assumptions fixed.")
+               f"vs {pct(r['base_cagr'])} in your base case ({how}; final-year revenue {money(r['implied_final_revenue'])}), holding "
+               + ("the incremental margin (margins re-derived from the implied revenue path)" if r.get("incremental") else "the margin path")
+               + ", reinvestment, WACC and terminal assumptions fixed.")
     else:
         txt = (f"## Reverse DCF\n\nAt {money(r['price'], 2)}/share the market implies a **terminal EBIT margin of {pct(r['implied_terminal_ebit_margin'])}** "
                f"({r['mode']}), holding the growth path fixed.")

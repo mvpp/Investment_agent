@@ -1,6 +1,6 @@
 # Technology Playbooks
 
-Software/SaaS · Consumer subscription · Ad platforms · Marketplaces & e-commerce · Semiconductors · Hardware & devices · AI infrastructure & neoclouds
+Software/SaaS · Consumer subscription · Ad platforms · Marketplaces · E-commerce (1P) & DTC brands · Semiconductors · Hardware & devices · AI infrastructure & neoclouds
 
 Each block: value equation → KPIs that move value → how to estimate if undisclosed → sanity benchmarks (approximate 2024–26 ranges; refresh before relying) → valuation → traps.
 
@@ -21,7 +21,12 @@ Each block: value equation → KPIs that move value → how to estimate if undis
 
 **Sanity benchmarks (public SaaS, refresh via Clouded Judgement/Meritech):** median revenue growth mid-teens; median NRR ~105–112% (top quartile >120%); median GRR ~88–92%; subscription GM 75–82%; CAC payback 20–35 months (median), <18 best-in-class; Rule of 40 median ~25–35; SBC 10–25% of revenue (lower for mature); mature steady-state FCF margin 25–35% (after SBC ~15–25%).
 
-**Valuation:** 10-yr DCF with margin path to steady state (justify via incremental margins and peers at scale) → cross-check EV/NTM revenue against a regression on growth + FCF margin across peers; reverse DCF for implied growth. For high-growth names, customer-based valuation (cohort LTV − CAC) is the most honest frame.
+**Valuation — the method changes with the company's stage:**
+- **Early** (growth >30%, FCF ≈ 0 or negative): customer-based valuation — cohort LTV − CAC (`valuation.py ltv`) × new customers the S&M budget buys — plus a scenario DCF (each scenario with a survival/success probability). Rule of 40 is a quality gate here, not a price; EV/NTM revenue vs growth-matched peers is context only.
+- **Scaling** (growth ~15–30%, margins rising): 10-yr DCF in **incremental-margin mode** (`margin0` = core EBIT margin, `incremental_margin` from Δcore EBIT ÷ Δcore revenue over 4–8 quarters, `margin_cap` at the steady state of peers at scale; `examples/dcf_incremental.json`). Reverse DCF for implied growth.
+- **Mature** (growth <15%, stable FCF): DCF still anchors, cross-checked by FCF yield after SBC + sustainable growth ≈ expected return (compare with the hurdle), ROIC on incremental capital including acquisitions, and P/E on core EPS.
+
+At every stage, cross-check EV/NTM revenue against a regression on growth + FCF margin across peers — but that regression and Rule of 40 price **current** margins. When the incremental margin is far above the current one (e.g. 5% EBIT margin, 40%+ on new revenue), they call the stock expensive by construction; that is exactly when the incremental-margin DCF should override them. State the incremental margin and its evidence in the memo.
 
 **Traps:** non-GAAP margins that exclude 20% SBC; "ARR" definitions that include usage or one-off services; NRR boosted by price increases that churn later; seat-based models exposed to AI headcount compression; capitalized commissions (ASC 340-40) flattering S&M; multi-year prepaid deals inflating RPO.
 
@@ -59,19 +64,40 @@ Each block: value equation → KPIs that move value → how to estimate if undis
 
 ---
 
-## Marketplaces, e-commerce & DTC
+## Marketplaces (3P)
 
 **Value equation:** GMV × take rate × contribution margin − fixed costs; GMV = buyers × frequency × order value.
 
-**KPIs:** GMV / gross bookings growth · take rate (and ads/fintech attach) · contribution margin per order · buyer cohort repeat rate · CAC and payback · fulfillment cost per order · return rate (DTC) · supply-side liquidity (sellers, utilization).
+**KPIs:** GMV / gross bookings growth · take rate (and ads/fintech attach) · contribution margin per order · buyer cohort repeat rate · CAC and payback · supply-side liquidity (sellers, utilization).
 
-**If undisclosed:** take rate = revenue ÷ GMV (GMV from S-1/alt data); contribution per order from (gross profit − variable fulfillment/marketing) ÷ orders; repeat from cohort charts or app retention data.
+**If undisclosed:** take rate = revenue ÷ GMV (GMV from S-1/alt data); contribution per order from (gross profit − variable marketing/incentives) ÷ orders; repeat from cohort charts or app retention data.
 
-**Benchmarks:** 1P retailers: low-single-digit EBIT; 3P marketplaces: take rates 10–20% (incl. ads) for e-commerce, 15–30% for services/travel; DTC: repeat purchase >30%, contribution margin after marketing >10%, CAC payback <12 months.
+**Benchmarks:** take rates 10–20% (incl. ads) for e-commerce, 15–30% for services/travel; contribution margin per transaction >15% at scale.
 
-**Valuation:** DCF from GMV × take rate × steady-state margin; EV/gross profit vs peers; for unprofitable names, scenario DCF.
+**Valuation:** DCF from GMV × take rate × steady-state margin (incremental-margin mode once contribution is positive); EV/gross profit vs peers; for unprofitable names, scenario DCF.
 
 **Traps:** EV/GMV across different take-rate models; gross vs net revenue presentation; incentives booked as contra-revenue vs marketing; ads revenue growth masking core marketplace stagnation.
+
+---
+
+## E-commerce (1P) & DTC brands
+
+The company owns the inventory, so there is no take rate: value is decided by what each order and each customer cohort leaves after fulfillment and the marketing that bought them.
+
+**Value equation:** Orders × AOV × contribution margin per order (gross margin − fulfillment & shipping − payment − variable marketing) − fixed costs; customer value = Σ cohort contribution over its life − CAC.
+
+**KPIs:** active customers and cohort repeat rate (orders per customer by acquisition year) · AOV · gross margin · fulfillment + shipping % of sales · contribution margin after marketing · CAC and payback · marketing split (acquisition vs retention) · return rate · inventory turns and markdowns · channel mix (own site vs Amazon vs wholesale).
+
+**If undisclosed:**
+- CAC ≈ acquisition marketing ÷ new customers; new customers ≈ active_t − active_{t−1} × retention (retention from cohort charts or "% of revenue from returning customers").
+- Contribution margin = (gross profit − fulfillment − payment fees − performance marketing) ÷ revenue, rebuilt from 10-K cost lines (shipping and fulfillment often sit in opex, not COGS).
+- LTV with `valuation.py ltv` using **contribution margin** (not gross margin) as `gross_margin`, annual orders × AOV as `arpa`, and 1 − repeat rate as `annual_churn`.
+
+**Benchmarks:** repeat purchase >30%; contribution margin after marketing >10%; CAC payback <12 months; DTC gross margins 50–70%, of which fulfillment + marketing commonly absorb 35–50 points; 1P generalist retailers earn low-single-digit EBIT.
+
+**Valuation:** contribution-margin build → DCF. Revenue = retained cohorts + new customers (acquisition budget ÷ CAC); steady-state margin = contribution at mature marketing spend (mostly retention) − fixed costs; reach it with incremental-margin mode. Cross-check EV/gross profit vs peers and, once profitable, EV/EBITDA vs mature retail.
+
+**Traps:** blended CAC hiding worsening new cohorts; "contribution margin" quoted before marketing; free shipping and returns buried in opex; growth from wholesale or Amazon that lifts revenue but cuts margin and customer ownership; dependence on paid-social ad prices; inventory build and markdowns.
 
 ---
 

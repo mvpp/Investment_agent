@@ -1,6 +1,6 @@
 # Consumer & Industrial Playbooks
 
-Retail · Restaurants & franchisors · Consumer staples · Autos & EVs · Industrials & capital goods · Aerospace & defense · Airlines & transport · Space & early-stage hardware
+Retail · Restaurants & franchisors · Consumer staples · Autos & EVs · Industrials & capital goods · Aerospace & defense · Airlines · Railroads · Trucking, LTL & logistics · Shipping · Space & early-stage hardware
 
 ---
 
@@ -89,7 +89,7 @@ Retail · Restaurants & franchisors · Consumer staples · Autos & EVs · Indust
 
 ---
 
-## Airlines & transport
+## Airlines
 
 **Value equation:** Capacity (ASMs) × load factor × yield − CASM; extreme operating leverage.
 
@@ -98,6 +98,58 @@ Retail · Restaurants & franchisors · Consumer staples · Autos & EVs · Indust
 **Valuation:** mid-cycle EV/EBITDAR (lease-adjusted); loyalty program SOTP (valued like a payments business); asset value of fleet.
 
 **Traps:** peak-cycle EPS; ignoring leases; labor contract step-ups.
+
+---
+
+## Railroads
+
+**Value equation:** Carloads × revenue per carload − operating cost; an irreplicable network with near-duopoly pricing, so the efficiency lever is the **operating ratio** (operating expenses ÷ revenue).
+
+**KPIs:** carloads/units by commodity (intermodal, coal, chemicals, autos, grain) · revenue per unit split into price, fuel surcharge and mix · operating ratio · train velocity, terminal dwell, on-time performance · capex % revenue · regulatory exposure (Surface Transportation Board) · coal secular decline.
+
+**If undisclosed:** weekly carloads by railroad from AAR traffic reports; core pricing ex-fuel from management commentary ("same-store price"); fuel-surcharge lag from the diesel price path.
+
+**Benchmarks:** best Class I operating ratios ~55–60%, laggards 65%+; capex 15–20% of revenue; leverage ~2.5–3x net debt/EBITDA.
+
+**Valuation:** DCF and P/E on core EPS; EV/EBITDA vs Class I peers. The network can't be replicated, so a terminal RONIC above WACC is defensible — but state it and size it.
+
+**Traps:** fuel-surcharge timing flattering or depressing margins (R3); land and asset-sale gains (R0); OR "improvement" from under-investment that later shows up as service failure and regulatory backlash; merger synergy targets.
+
+---
+
+## Trucking, LTL & logistics
+
+**Value equation:**
+- **LTL (less-than-truckload):** shipments × weight per shipment × revenue per hundredweight − cost of a dense terminal network. Network density is the moat.
+- **Truckload:** loaded miles × rate per mile − driver, fuel and equipment cost. Fragmented and cyclical.
+- **Freight brokerage:** loads × net revenue per load (gross margin) − people cost. Asset-light.
+- **Parcel:** pieces × revenue per piece − network cost per piece.
+
+**KPIs:** tonnage/shipments per day · revenue per hundredweight ex-fuel (LTL yield) · operating ratio · truckload contract vs spot rate per mile · tractor count and utilization · terminals and door count · net revenue margin and loads per employee (brokers) · average daily volume and cost per piece (parcel) · insurance and claims cost · gains on equipment sales · customer concentration (insourcing risk for parcel).
+
+**If undisclosed:** freight-cycle position from the Cass Freight Index, ATA tonnage, DAT spot vs contract spread and Class 8 truck orders; broker gross margin squeeze when spot rates rise faster than contract rates.
+
+**Benchmarks:** best LTL operating ratios ~70–75%, average ~80–85%; truckload mid-cycle OR ~88–92%; leverage <2x net debt/EBITDA through the cycle (truckers that lever up at peaks are the ones that fail).
+
+**Valuation:** mid-cycle EPS × mid-cycle P/E or mid-cycle EV/EBITDA; brokers on net revenue, never gross; LTL network replacement cost (doors × cost per door) as a moat and floor check.
+
+**Traps:** capitalizing peak freight-cycle earnings; equipment-sale gains in core EPS (R3); nuclear verdicts and insurance cost spikes; one-off share gains when a competitor fails (its terminals and freight get redistributed once); gross revenue growth at brokers that is only rate inflation; union contract step-ups at parcel carriers.
+
+---
+
+## Shipping (tankers, dry bulk, containers, gas carriers)
+
+**Value equation:** NAV = fleet market value − net debt; earnings = vessel days × (time-charter-equivalent rate − vessel opex − G&A per day). Rates swing with the gap between fleet supply and trade demand.
+
+**KPIs:** TCE rate per day vs cash breakeven per day · fleet age and fuel efficiency (eco/scrubber, IMO compliance) · orderbook as % of existing fleet · contract coverage (charter backlog and counterparty) · dividend policy and payout of FCF.
+
+**If undisclosed:** vessel values from broker valuations (VesselsValue, Clarksons) by size and age; cash breakeven = (opex + G&A + interest + scheduled debt amortization) ÷ vessel days; forward rates from FFA curves where traded.
+
+**Benchmarks:** orderbook above ~15–20% of the fleet = supply risk 2–3 years out; useful life ~25 years with scrap value at the end.
+
+**Valuation:** P/NAV (shipping equities trade around NAV through the cycle; buy at a discount, not on yield); FCF yield at forward/FFA rates and at mid-cycle TCE; DCF on charter backlog for long-term contracted fleets (LNG carriers).
+
+**Traps:** annualizing spot TCE; dividend yields computed on peak quarters; ignoring depreciation and fleet renewal capex; regulatory obsolescence of older tonnage; counterparty risk on long charters.
 
 ---
 

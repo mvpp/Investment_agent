@@ -24,15 +24,17 @@ REITs · Regulated utilities · Telecom & cable · Towers & fiber · Conglomerat
 
 **Value equation:** Earnings = rate base × equity ratio × allowed ROE × earned-to-allowed ratio; growth = rate base CAGR (capex plan) funded by debt + equity.
 
+**Value-creation test (do this first):** rate-base growth creates value only if the **earned ROE exceeds the cost of equity**. Justified P/B ≈ (earned ROE − g) ÷ (COE − g). If earned ROE ≤ COE, a faster capex plan funded with new equity adds EPS but not value per share — the premium multiple for "rate-base growth" is unearned. Compute COE per valuation-core §2 and compare it with the earned (not allowed) ROE in each major jurisdiction.
+
 **KPIs:** rate base growth (5-yr capex plan) · allowed ROE and equity layer by jurisdiction · earned vs allowed ROE (regulatory lag) · regulatory-jurisdiction quality · equity issuance needs · FFO/debt (credit metric) · load growth (data centers) and large-load tariffs · wildfire/storm liability.
 
 **If undisclosed:** allowed ROEs from state PUC rate orders (RRA data); rate base by jurisdiction from investor decks.
 
 **Benchmarks:** allowed ROEs ~9.5–10.5% (US, recent years — refresh); EPS growth 5–8% typical for capex-heavy plans; FFO/debt >14–15% for solid ratings.
 
-**Valuation:** P/E vs utility group, premium/discount for growth and jurisdiction; DDM; rate-base multiple (EV/rate base).
+**Valuation:** P/E vs utility group, premium/discount for growth and jurisdiction — justified by the earned-ROE − COE spread, not growth alone; DDM; rate-base multiple (EV/rate base) and P/B against justified P/B.
 
-**Traps:** equity dilution needed to fund capex; regulatory lag in inflationary periods; wildfire liability (western utilities); data-center load forecasts that don't materialize.
+**Traps:** paying for rate-base growth when earned ROE ≤ COE; equity dilution needed to fund capex; regulatory lag in inflationary periods; wildfire liability (western utilities); data-center load forecasts that don't materialize.
 
 ---
 

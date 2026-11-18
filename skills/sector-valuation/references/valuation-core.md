@@ -20,11 +20,12 @@ Ask first: **what is the unit of value creation, and what makes its cash flow ce
 
 | Business model | Primary | Cross-check | Never |
 |---|---|---|---|
-| Recurring high-growth (SaaS, subscription) | DCF with margin path + customer-economics (LTV/CAC) build | EV/NTM revenue vs (growth + FCF margin) regression; reverse DCF | P/E on depressed GAAP |
+| Recurring high-growth (SaaS, subscription) | By stage (tech.md): early — LTV/CAC cohort build + scenario DCF; scaling — DCF on incremental margins; mature — DCF anchored by FCF yield + growth and ROIC | EV/NTM revenue vs (growth + FCF margin) regression — context only when incremental ≫ current margin; reverse DCF | P/E on depressed GAAP; EV/S or Rule of 40 as the valuation |
 | Ad / consumer platforms | DCF or P/E on **core** EPS; SOTP when an investment segment exists | Value per user; reverse DCF | Headline GAAP P/E in a quarter with one-offs |
 | Marketplaces / payments | DCF from GMV/TPV × take rate × contribution margin | EV/gross profit | EV/GMV across different take-rate models |
+| E-commerce (1P) / DTC brands | Contribution-margin build (cohorts × orders × contribution after marketing − CAC) → DCF to steady-state margin | EV/gross profit; EV/EBITDA vs mature retail once profitable | Revenue multiple without contribution margin after marketing |
 | Semis / hardware (cyclical) | Mid-cycle EPS × mid-cycle P/E; cycle-normalized DCF | EV/EBITDA at mid-cycle; replacement value | Peak EPS × peak multiple |
-| Regulated utilities / infra | Rate-base growth → EPS → DDM / P/E vs group | RAB multiple | Unregulated DCF ignoring allowed ROE |
+| Regulated utilities / infra | Rate-base growth → EPS → DDM / P/E vs group, judged by the **earned ROE − cost of equity** spread | RAB multiple; justified P/B from earned ROE | Unregulated DCF ignoring allowed ROE; paying for rate-base growth when earned ROE ≤ COE |
 | E&P / mining (finite reserves) | NAV (risked PV of reserves + inventory) at a stated price deck | EV/DACF, FCF yield at strip | Perpetuity DCF on today's production |
 | REITs | NAV via cap rates | P/AFFO, implied cap rate | P/E on GAAP EPS (depreciation of appreciating assets) |
 | Banks | P/TBV justified by sustainable ROTCE | P/E on normalized credit costs | EV/EBITDA (debt is raw material) |
@@ -32,11 +33,15 @@ Ask first: **what is the unit of value creation, and what makes its cash flow ce
 | Pharma / biotech | rNPV per asset + base business DCF with LOE cliffs | EV/sales on peak-sales; pipeline-adjusted P/E | P/E ignoring patent expiries |
 | Retail / restaurants | Unit-economics DCF (units × AUV × 4-wall margin) | EV/EBITDA (lease-adjusted) | Store-count extrapolation without returns |
 | Industrials / capital goods | Through-cycle EV/EBIT + ROIC spread | Backlog-implied revenue DCF | Peak margins |
-| Airlines / transport | Mid-cycle EV/EBITDAR (lease-adjusted), asset value | Replacement cost | Peak EPS |
+| Airlines | Mid-cycle EV/EBITDAR (lease-adjusted), asset value | Replacement cost; loyalty-program SOTP | Peak EPS |
+| Rail / trucking / logistics | Mid-cycle P/E or EV/EBITDA on an operating-ratio path; DCF for rail | Network replacement cost (rail, LTL doors) | Peak freight-cycle EPS |
+| Shipping | P/NAV on broker vessel values | FCF yield at mid-cycle TCE; charter-backlog DCF | Annualized spot TCE |
 | Early-stage / pre-profit | Scenario DCF (survival probability × steady state), dilution-adjusted | EV/forward revenue discounted back | Single-point DCF |
 | Conglomerates / holdcos | SOTP with holdco discount | — | One multiple for unlike parts |
 
 Core rule: **value is forward FCF and its certainty.** An EV/S of 40 can be cheap if incremental EBITDA margins are 75–85%, FCF conversion ~95% and 30%+ growth is durable. Always look at incremental, not average, economics for scaling businesses.
+
+Putting the rule into the model: today's average margin hides operating leverage, and anything priced off current margins (EV/S, P/E, the growth + FCF-margin regression, Rule of 40) calls such a company expensive by construction. Build the margin path from the incremental margin instead — average margin_t = (m₀·R₀ + Σ m_inc·ΔR) / R_t — with the calculator's `margin0` + `incremental_margin` + `margin_cap` (`examples/dcf_incremental.json`). Evidence for m_inc: Δcore EBIT ÷ Δcore revenue over 4–8 quarters (earnings-normalization), gross margin as its ceiling, and which cost lines are genuinely fixed; fade it toward, and cap the average at, a steady state supported by peers at scale. Then FCF conversion (EBITDA → FCF after capex, SBC and working capital) decides how much of that margin is cash. The same arithmetic runs in reverse: high-fixed-cost businesses have high decremental margins in a downturn.
 
 ---
 

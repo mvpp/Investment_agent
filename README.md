@@ -42,6 +42,6 @@ python3 skills/investment-memo/scripts/memo_check.py memos/META_2026-11-17.md
 - **us-value-investing** (Day1Global): the four-dimension quality score (returns, balance sheet, cash conversion, moat) → memo quality score, which sets the margin of safety.
 - **AI Equity Analyst prompts** (Gary Mishuris): source hierarchy and citation discipline, Porter five forces with 10-year trend, competitive-advantage size, Fisher points, management plan-vs-delivery, hidden risks, Schilit forensic score, devil's advocate, thesis checker.
 - **Anthropic financial-services skills** (ic-memo, thesis-tracker, dcf-model): balanced memo structure, ranked risks with mitigants, falsifiable thesis with update log, DCF/sensitivity discipline, valuation reconciliation.
-- **This repo's notes** (`investment_skills.md`, `valuation_skill.md`) and the original industry deep-dive (now `skills/us-industry-deepdive`): industry KPI cheat sheet and model-by-industry map (expanded into the sector playbooks), forward-FCF/incremental-margin principle, expectation-gap / profit-pool / chokepoint analysis.
+- **The author's original notes** (an industry KPI cheat sheet and model-by-industry map, since folded into the sector playbooks and removed) and the original industry deep-dive (now `skills/us-industry-deepdive`): forward-FCF/incremental-margin principle, expectation-gap / profit-pool / chokepoint analysis.
 
 *Research tooling only; not investment advice.*
