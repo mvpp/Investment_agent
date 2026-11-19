@@ -4,7 +4,8 @@
 Usage: python3 memo_check.py memo.md [--max-pages 5] [--calc scenarios.json]
 
 --calc takes the JSON from `valuation.py scenarios <input> --json`; the header must then show
-the labeled target, fair value today and action price, rounded to the displayed precision (up to 1%).
+the labeled target, fair value today and action price, rounded to the displayed precision (up to 1%),
+and the calculator's rating (Buy / Add / Avoid / Hold / Trim / Sell, plus "watchlist" when it has one).
 
 Page estimate: ~450 English words per dense memo page (tables included); one
 English word ~= 1.8 CJK characters. Exit code 1 if any hard check fails.
@@ -76,26 +77,47 @@ HEADER_FIELDS = (
 )
 
 
+RATING_WORDS = {"buy": r"\bbuy\b|买入", "add": r"\badd\b|加仓", "avoid": r"\bavoid\b|回避|规避", "hold": r"\bhold\b|持有",
+                "trim": r"\btrim\b|减持|减仓", "sell": r"\bsell\b|卖出|清仓"}
+
+
+def rating_check(head, rating, fails):
+    """The rating clause (from 'Rating'/'评级' to the next · or | or line end) must name the calculator's rating."""
+    clause = re.search(r"(?:rating|评级)[^\n·|]*", head, re.I)
+    main = rating.split()[0].lower()
+    if not clause or not re.search(RATING_WORDS.get(main, re.escape(main)), clause[0], re.I):
+        fails.append(f"Header rating must be the calculator's: {rating}.")
+    elif "watchlist" in rating.lower() and not re.search(r"watch ?list|观察", clause[0], re.I):
+        fails.append(f"Header rating must say watchlist: {rating}.")
+
+
 def tie_check(head, calc, fails):
     head = re.sub(r"[*_`]", "", head)
+    quality_d = calc.get("action_price") is None and "quality D" in (calc.get("mos_note") or "")
     for label, key, pattern in HEADER_FIELDS:
-        if key not in calc or (calc[key] is None and key != "fair_value_today"):
+        if key not in calc or (calc[key] is None and key != "fair_value_today" and not (key == "action_price" and quality_d)):
             fails.append(f"Scenarios output lacks {key}.")
             continue
         value = calc[key]
         if value is None:
             continue
-        # Optional horizon qualifier belongs to the label, e.g. "Target (3 yr): $120".
-        match = re.search(r"(?:" + pattern + r")[ \t]*(?:[(（][^()（）\n|·]*[)）][ \t]*)?"
-                          r"[:：=]?[ \t]*(?:≤|<=)?[ \t]*(?:USD|US\$|\$|¥|￥)?[ \t]*"
-                          r"(-?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d,.%])", head, re.I)
-        if match:
-            amount = match[1].replace(",", "")
-            decimals = len(amount.partition(".")[2])
-            tolerance = min(0.5 * 10 ** -decimals, max(0.005, abs(value) * 0.01))
-            if abs(float(amount) - value) <= tolerance + 1e-10:
-                continue
+        # Optional horizon qualifier belongs to the label, e.g. "Target (3 yr): $120". Any labeled
+        # occurrence may tie, so a title that also says "target" does not hide the header value.
+        matches = re.finditer(r"(?:" + pattern + r")[ \t]*(?:[(（][^()（）\n|·]*[)）][ \t]*)?"
+                              r"[:：=]?[ \t]*(?:≤|<=)?[ \t]*(?:USD|US\$|\$|¥|￥)?[ \t]*"
+                              r"(-?\d+(?:,\d{3})*(?:\.\d+)?)(?![\d,.%])", head, re.I)
+        if any(tied(m[1], value) for m in matches):
+            continue
         fails.append(f"Header {label} must show its scenarios value ({value:,.2f}).")
+    if calc.get("rating"):
+        rating_check(head, calc["rating"], fails)
+
+
+def tied(text, value):
+    amount = text.replace(",", "")
+    decimals = len(amount.partition(".")[2])
+    tolerance = min(0.5 * 10 ** -decimals, max(0.005, abs(value) * 0.01))
+    return abs(float(amount) - value) <= tolerance + 1e-10
 
 
 def main():

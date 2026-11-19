@@ -168,6 +168,11 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
                        not the final year's D&A, which still carries boom vintages (terminal_da:
                        "final_year" restores the old behaviour).
       sales_to_capital (scalar or path): reinvestment = Δrevenue / S2C.
+    Revenue declines: by default no positive working capital or invested capital is released (a
+      downturn rarely hands back cash at the growth-phase ratio — inventory is written down, receivables
+      stretch). Set sales_to_capital_down (S2C mode) or nwc_pct_down (capex mode) to release capital on
+      declines, from evidence in the last downturn. A negative nwc_pct (advance-funded) still consumes
+      cash on a decline unless nwc_pct_down overrides it.
       reinvestment_rate (path): reinvestment = NOPAT × rate (growth is then 'free' — avoid for reverse growth).
     Margins (any mode): a path in ebit_margin (ebitda_margin in capex mode), OR incremental_margin
       (scalar/path, on each year's new revenue) + margin0 (base-year margin, same basis) [+ margin_cap,
@@ -198,9 +203,11 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
         if any(number(value, "capex") < 0 for value in [*cx, *hist]):
             raise ValueError("capex_pct and capex_history must be nonnegative")
         hist = [hist[0]] * max(0, max(l for _, l in cls) + lag - len(hist)) + hist
-        nwc = c.get("nwc_pct", 0.0)
+        nwc = number(c.get("nwc_pct", 0.0), "nwc_pct")
+        nwc_down = number(c.get("nwc_pct_down", min(nwc, 0.0)), "nwc_pct_down")
     elif c.get("sales_to_capital") is not None:
         s2c = [positive(v, "sales_to_capital") for v in path(c["sales_to_capital"], n, "sales_to_capital")]
+        s2c_down = positive(c["sales_to_capital_down"], "sales_to_capital_down") if c.get("sales_to_capital_down") is not None else None
     else:
         rr = path(c.get("reinvestment_rate", 0.0), n, "reinvestment_rate")
     rev_prev, rows, pv_sum = c["revenue0"], [], 0.0
@@ -212,13 +219,18 @@ def dcf_core(c, growth=None, margin_end=None, wacc=None, g=None, growth_scale=1.
             hist.append(capex)
             da = da_from(hist, cls, lag)
             ebit = rev * m[t] - da
-            reinv = capex - da + nwc * (rev - rev_prev)
+            reinv = capex - da + (nwc if rev >= rev_prev else nwc_down) * (rev - rev_prev)
             row.update({"ebitda_margin": m[t], "capex": capex, "da": da})
         else:
             ebit = rev * m[t]
         nopat = ebit * (1 - tax[t])
         if not capex_mode:
-            reinv = (rev - rev_prev) / s2c[t] if c.get("sales_to_capital") is not None else nopat * rr[t]
+            if c.get("sales_to_capital") is None:
+                reinv = nopat * rr[t]
+            elif rev >= rev_prev:
+                reinv = (rev - rev_prev) / s2c[t]
+            else:
+                reinv = (rev - rev_prev) / s2c_down if s2c_down else 0.0
         fcff = nopat - reinv
         pv = fcff / (1 + wacc) ** ((t + 0.5) if mid else (t + 1))
         pv_sum += pv
@@ -288,8 +300,13 @@ def dcf(c):
         warn.append(f"Terminal RONIC {pct(r['ronic'])} assumes a very durable moat; most companies fade toward WACC + a few points.")
     if r.get("capex_mode") and c.get("terminal_da") == "final_year" and any(row["capex"] < 0.95 * row["da"] for row in r["rows"][-3:]):
         warn.append("Capex runs below D&A in the final explicit years and the terminal value uses that year's D&A — negative net reinvestment flatters the terminal FCFF; use terminal_da steady_state or extend the horizon.")
-    if not r.get("capex_mode") and c.get("sales_to_capital") is not None and any(row["growth"] < 0 for row in r["rows"]):
-        warn.append("Revenue declines while reinvestment is sales-to-capital: a decline is treated as capital RELEASED (cash in). For advance-funded businesses (customer prepayments) a decline CONSUMES cash — use capex mode with a negative nwc_pct, or deduct excess_customer_advances.")
+    declines = any(row["growth"] < 0 for row in r["rows"])
+    if declines and not r.get("capex_mode") and c.get("sales_to_capital") is not None:
+        if c.get("sales_to_capital_down") is not None:
+            warn.append(f"Revenue declines release capital at sales_to_capital_down {c['sales_to_capital_down']:g}x (cash in) — cite the last downturn's working-capital release as evidence.")
+        warn.append("Revenue declines in sales-to-capital mode: for advance-funded businesses (customer prepayments) a decline CONSUMES cash — use capex mode with a negative nwc_pct, or deduct excess_customer_advances.")
+    if declines and r.get("capex_mode") and c.get("nwc_pct_down", 0) > 0:
+        warn.append(f"Revenue declines release working capital at nwc_pct_down {pct(c['nwc_pct_down'])} — cite the last downturn's working-capital release as evidence.")
     if r["incremental"]:
         basis = "EBITDA" if r["capex_mode"] else "EBIT"
         if c.get("margin_cap") is None:
@@ -515,14 +532,132 @@ def price_linked_dcf(c, s, yrs):
         hb = s["horizon_bridge"]
         if not float(yrs).is_integer() or yrs > len(d["rows"]):
             raise ValueError("horizon_bridge requires a whole year within the explicit DCF")
-        # End of year H, after that year's FCFF. Keep the underlying DCF timing convention.
-        remaining_pv = sum(row["pv"] for row in d["rows"] if row["year"] > yrs) + d["pv_tv"]
-        ev_h = remaining_pv * (1 + model["wacc"]) ** yrs
         if units(c) != units(model) or units({**model, **hb}) != units(model):
             raise ValueError("horizon bridge and DCF must use the same money and share scale")
-        number(hb["net_cash"], "horizon net_cash")
-        equity, shares = bridge(hb, ev_h)
+
+        def ev_at(t):
+            # End of year t, after that year's FCFF. Keep the underlying DCF timing convention.
+            return (sum(row["pv"] for row in d["rows"] if row["year"] > t) + d["pv_tv"]) * (1 + model["wacc"]) ** t
+
+        s.setdefault("warnings", [])
+        if "buyback_share" in hb:
+            if "net_cash" in hb or "diluted_shares" in hb:
+                raise ValueError("payout-mode horizon_bridge derives net_cash and diluted_shares — do not supply them")
+            out, sched = payout_bridge(model, d, hb, c, int(yrs), ev_at, hb.get("repurchase_price", "market"))
+            neutral, _ = payout_bridge(model, d, hb, c, int(yrs), ev_at, "intrinsic")
+            equity, shares = bridge(out, ev_at(yrs))
+            n_equity, n_shares = bridge(neutral, ev_at(yrs))
+            s["payout_schedule"] = sched
+            s["horizon_net_cash"], s["horizon_diluted_shares"] = out["net_cash"], out["diluted_shares"]
+            s["buyback_value_effect"] = equity / shares - n_equity / n_shares
+            dear = [row for row in sched if row["buyback"] > 0 and row["repurchase_price"] > row["intrinsic_value"] * 1.001]
+            if dear:
+                s["warnings"].append(f"buybacks at {money(dear[0]['repurchase_price'], 2)}/sh in year {dear[0]['year']} exceed intrinsic value "
+                                     f"{money(dear[0]['intrinsic_value'], 2)} — repurchases destroy {money(-s['buyback_value_effect'], 2)}/sh by year {yrs:g}.")
+        else:
+            number(hb["net_cash"], "horizon net_cash")
+            equity, shares = bridge(hb, ev_at(yrs))
+            s["warnings"].append("explicit horizon net_cash/diluted_shares — prefer payout mode (buyback_share) so buybacks and retained cash follow one rule.")
         s["fundamentals_based_target"] = equity / shares
+
+
+def payout_bridge(model, d, hb, c, yrs, ev_at, repurchase):
+    """Roll the linked DCF's opening balances to year `yrs`: each year's FCFF (+ yield on net cash)
+    is added to cash, buyback_share and dividend_share of positive FCFF are paid out, and repurchased
+    shares are retired at the repurchase price — "market" (today's price rolled at Ke − DY),
+    "intrinsic" (the scenario's own value per share that year: value-neutral) or an explicit list."""
+    acts = model.get("capital_actions") or []
+    cash = model.get("net_cash", 0.0) + sum(a.get("cash", 0.0) for a in acts)
+    shares = positive(model["diluted_shares"], "diluted_shares") + sum(a.get("shares", 0.0) for a in acts)
+    inv = number(hb.get("investments", model.get("investments", 0.0)), "horizon investments")
+    claims = number(hb.get("other_claims", model.get("other_claims", 0.0) + sum(a.get("claims", 0.0) for a in acts)), "horizon other_claims")
+    adv = number(hb.get("excess_customer_advances", model.get("excess_customer_advances", 0.0)), "horizon excess_customer_advances")
+    bb = probability(hb["buyback_share"], "buyback_share")
+    dv = probability(hb.get("dividend_share", 0.0), "dividend_share")
+    if bb + dv > 1:
+        raise ValueError("buyback_share + dividend_share cannot exceed 1")
+    cy = number(hb.get("cash_yield", 0.0), "cash_yield")
+    dil = number(hb.get("annual_dilution", 0.0), "annual_dilution")
+    if repurchase == "market":
+        if "cost_of_equity" not in c:
+            raise ValueError("repurchase_price 'market' needs cost_of_equity")
+        roll = 1 + number(c["cost_of_equity"], "cost_of_equity") - c.get("dividend_yield", 0.0)
+    elif isinstance(repurchase, list):
+        if len(repurchase) < yrs:
+            raise ValueError(f"repurchase_price list needs {yrs} values")
+        for v in repurchase:
+            positive(v, "repurchase_price")
+    elif repurchase != "intrinsic":
+        raise ValueError("repurchase_price must be 'market', 'intrinsic' or a list of prices")
+    rows = []
+    for t in range(1, yrs + 1):
+        fcff = d["rows"][t - 1]["fcff"]
+        interest = cy * cash
+        cash += fcff + interest
+        shares *= 1 + dil
+        buyback, dividends = bb * max(fcff, 0.0), dv * max(fcff, 0.0)
+        intrinsic = (ev_at(t) + cash + inv - claims - adv) / shares
+        rp = (c["price"] * roll ** t if repurchase == "market" else intrinsic if repurchase == "intrinsic" else repurchase[t - 1])
+        retired = buyback / positive(rp, "repurchase price")
+        cash -= buyback + dividends
+        shares = positive(shares - retired, "horizon shares after buybacks")
+        rows.append({"year": t, "fcff": fcff, "interest": interest, "buyback": buyback, "dividends": dividends, "repurchase_price": rp,
+                     "intrinsic_value": intrinsic, "shares_retired": retired, "shares_end": shares, "net_cash_end": cash})
+    return {"unit": model["unit"], "shares_unit": model["shares_unit"], "net_cash": cash, "diluted_shares": shares,
+            "investments": inv, "other_claims": claims, "excess_customer_advances": adv}, rows
+
+
+MOS_BASE = {"A": 0.15, "B": 0.25, "C": 0.35}
+POLICY_THRESHOLD = 0.25
+
+
+def mos_rule(m):
+    """margin_of_safety: a number (legacy) or {"quality": A-D, "cyclical": bool, "policy_exposure": share of
+    revenue that needs a discretionary government decision to keep selling at today's price,
+    "net_debt_ebitda": x}. A 15 / B 25 / C 35, +10 per factor that applies, cap 50; D = no position."""
+    if m is None:
+        return None, None, False
+    if not isinstance(m, dict):
+        return probability(m, "margin_of_safety"), "supplied", False
+    q = m.get("quality")
+    if q == "D":
+        return None, "quality D: no position", True
+    if q not in MOS_BASE:
+        raise ValueError("margin_of_safety.quality must be A, B, C or D")
+    factors = []
+    if m.get("cyclical"):
+        factors.append("cyclical")
+    exp = m.get("policy_exposure")
+    if exp is not None:
+        if probability(exp, "policy_exposure") >= POLICY_THRESHOLD:
+            factors.append(f"policy-binary ({pct(exp, 0)} of revenue)")
+    lev = m.get("net_debt_ebitda")
+    if lev is not None and number(lev, "net_debt_ebitda") > 3.5:
+        factors.append(f"levered ({lev:.1f}x)")
+    raw = MOS_BASE[q] + 0.10 * len(factors)
+    note = " + ".join([f"{q} {pct(MOS_BASE[q], 0)}"] + [f"{f} 10" for f in factors]) + f" = {pct(min(raw, 0.5), 0)}"
+    if raw > 0.5:
+        note += " (cap)"
+    if exp is None:
+        note += "; policy_exposure not given"
+    return min(raw, 0.5), note, False
+
+
+def rate(r, flags, quality_d, ke):
+    """Ordered rating table (research-playbook §8): the first row that matches wins."""
+    f = flags or {}
+    skew_ok = (r["skew"] is not None and r["skew"] >= 2) or r["skew_note"] == "price ≤ bear case"
+    if quality_d or f.get("kill_triggered") or f.get("thesis_broken") or f.get("accounting_flag"):
+        row, new, held, why = 1, "Avoid", "Sell", "quality D, kill condition triggered, thesis broken or accounting score ≥ 7"
+    elif r["irr"] >= r["hurdle"] and r["action_price"] is not None and r["price"] <= r["action_price"] and skew_ok and not f.get("kill_near"):
+        row, new, held, why = 2, "Buy", "Add", "IRR ≥ hurdle, price ≤ action price, skew ≥ 2:1, no kill condition near"
+    elif r["irr"] >= r["hurdle"]:
+        row, new, held, why = 3, "Avoid (watchlist, near miss)", "Hold", "IRR ≥ hurdle but price > action price, skew < 2:1 or a kill condition near"
+    elif ke is None or r["irr"] >= ke:
+        row, new, held, why = 4, "Avoid (watchlist)", "Hold", "IRR between cost of equity and hurdle"
+    else:
+        row, new, held, why = 5, "Avoid (watchlist)", "Trim", "IRR below cost of equity"
+    return {"rating": held if f.get("owned") else new, "rating_row": row, "rating_reason": why}
 
 
 def scenarios(c):
@@ -577,9 +712,18 @@ def scenarios(c):
     skew_note = None if skew is not None else ("price ≥ bull case" if bull <= price else "price ≤ bear case")
     buy_for_hurdle = ev / (1 + max(hurdle - dy, 0)) ** yrs
     fv_today = c.get("fair_value_today", weighted("value_today"))
-    mos = c.get("margin_of_safety")
-    mos_price = fv_today * (1 - probability(mos, "margin_of_safety")) if (fv_today is not None and mos is not None) else None
-    action = min(x for x in (mos_price, buy_for_hurdle) if x is not None)
+    mos, mos_note, quality_d = mos_rule(c.get("margin_of_safety"))
+    mos_price = fv_today * (1 - mos) if (fv_today is not None and mos is not None) else None
+    action = None if quality_d else min(x for x in (mos_price, buy_for_hurdle) if x is not None)
+    for s in sc:
+        warn += [f"{s.get('name', '?')}: {w}" for w in s.get("warnings", [])]
+    if len(sc) == 3:
+        order = sorted(sc, key=lambda s: s.get(basis, 0))
+        off = max(abs(s["prob"] - p) for s, p in zip(order, (0.25, 0.5, 0.25)))
+        if off > 1e-6 and not c.get("weight_basis"):
+            warn.append("Weights differ from 25/50/25 without a weight_basis — define bear/base/bull at the ~20th/50th/80th percentile of the Key Force driver, or state the base rate / dated evidence that moves them.")
+        elif off > 0.10 + 1e-9:
+            warn.append(f"A weight moves {pct(off, 0)} from 25/50/25 — more than the 10-point limit; move the KPI values instead.")
     if bear < price * 0.6:
         warn.append(f"Bear case ({'today' if have_today else 'horizon'} value) implies {pct(bear / price - 1)} — size the position for that loss, not the expected value.")
     if skew is not None and skew < 2:
@@ -588,11 +732,16 @@ def scenarios(c):
         warn.append(f"Expected IRR {pct(irr)} is below the cost of equity {pct(ke)} — expected value-destroying at this price.")
     if not have_today:
         warn.append("No value_today per scenario (or cost_of_equity): skew/bear use horizon values, which understate downside vs today's price.")
-    return {"required_return_rolled_target": weighted("required_return_rolled_target"),
-            "fundamentals_based_target": weighted("fundamentals_based_target"),
-            "rows": sc, "expected_value": ev, "expected_return": ev / price - 1, "irr": irr, "skew": skew, "skew_note": skew_note, "skew_basis": basis, "years": yrs,
-            "price": price, "buy_for_hurdle": buy_for_hurdle, "hurdle": hurdle, "fair_value_today": fv_today, "mos_price": mos_price,
-            "mos": mos, "action_price": action, "warnings": warn, "split_factor": c.get("split_factor")}
+    out = {"required_return_rolled_target": weighted("required_return_rolled_target"),
+           "fundamentals_based_target": weighted("fundamentals_based_target"),
+           "rows": sc, "expected_value": ev, "expected_return": ev / price - 1, "irr": irr, "skew": skew, "skew_note": skew_note, "skew_basis": basis, "years": yrs,
+           "price": price, "buy_for_hurdle": buy_for_hurdle, "hurdle": hurdle, "fair_value_today": fv_today, "mos_price": mos_price,
+           "mos": mos, "mos_note": mos_note, "action_price": action, "warnings": warn, "split_factor": c.get("split_factor"),
+           "weight_basis": c.get("weight_basis")}
+    out.update(rate(out, c.get("rating_flags"), quality_d, ke))
+    if "rating_flags" not in c:
+        warn.append("No rating_flags — the rating assumes no kill condition triggered or near, thesis intact, accounting score < 7, no position held.")
+    return out
 
 
 def render_scen(r):
@@ -606,12 +755,20 @@ def render_scen(r):
           f"- Max price that still earns the hurdle: {money(r['buy_for_hurdle'], 2)}"]
     for key, label in (("fundamentals_based_target", "Fundamentals-based target"), ("required_return_rolled_target", "Required-return rolled target")):
         o.append(f"- {label} (probability-weighted): {money(r[key], 2) if r[key] is not None else 'unavailable'}")
+    for s in r["rows"]:
+        if "payout_schedule" in s:
+            o.append(f"- {s['name']} horizon bridge (payout mode): net cash {money(s['horizon_net_cash'])} · diluted shares {money(s['horizon_diluted_shares'], 1)}"
+                     f" · buybacks vs value-neutral {s['buyback_value_effect']:+,.2f}/sh")
     if r["mos_price"] is not None:
-        o.append(f"- Fair value today x (1 − {pct(r['mos'], 0)} MOS): {money(r['mos_price'], 2)}")
-    o.append(f"- **Action price for the memo header (lower of the two): {money(r['action_price'], 2)}**")
+        o.append(f"- Fair value today x (1 − {pct(r['mos'], 0)} MOS): {money(r['mos_price'], 2)}" + (f" — MOS {r['mos_note']}" if r.get("mos_note") else ""))
+    if r["action_price"] is None:
+        o.append(f"- **No action price: {r['mos_note']}**")
+    else:
+        o.append(f"- **Action price for the memo header (lower of the two): {money(r['action_price'], 2)}**")
+    o.append(f"- **Rating for the memo header: {r['rating']}** (row {r['rating_row']}: {r['rating_reason']})")
     if r.get("split_factor"):
         k = r["split_factor"]
-        o.append(f"- After the {k:g}-for-1 split: fair value {money((r['fair_value_today'] or 0) / k, 2)} · target {money(r['expected_value'] / k, 2)} · action price {money(r['action_price'] / k, 2)} — show both in the header until the split is effective.")
+        o.append(f"- After the {k:g}-for-1 split: fair value {money((r['fair_value_today'] or 0) / k, 2)} · target {money(r['expected_value'] / k, 2)} · action price {money((r['action_price'] or 0) / k, 2)} — show both in the header until the split is effective.")
     if r["warnings"]:
         o += ["", "Warnings:"] + [f"- {w}" for w in r["warnings"]]
     return "\n".join(o)

@@ -1,0 +1,36 @@
+{
+ "unit": "USD M",
+ "_note": "Fundamentals-based 3-yr target with buybacks. Each scenario links a DCF; payout mode rolls that DCF's opening net cash and shares forward: FCFF (+ cash_yield on net cash) accumulates, buyback_share / dividend_share of positive FCFF is paid out, and repurchased shares retire at the repurchase_price path ('market' = today's price rolled at cost_of_equity − dividend_yield; 'intrinsic' = value-neutral; or a list). annual_dilution stays 0 when SBC is expensed in the DCF. A real run gives each scenario its own DCF file.",
+ "price": 600,
+ "years": 3,
+ "dividend_yield": 0.0035,
+ "cost_of_equity": 0.095,
+ "hurdle": 0.15,
+ "margin_of_safety": {
+  "quality": "A",
+  "cyclical": true,
+  "policy_exposure": 0.0
+ },
+ "rating_flags": {
+  "kill_triggered": false,
+  "kill_near": false,
+  "thesis_broken": false,
+  "accounting_flag": false,
+  "owned": false
+ },
+ "scenarios": [
+  {
+   "name": "Base",
+   "prob": 1.0,
+   "dcf": "dcf.json",
+   "horizon_bridge": {
+    "buyback_share": 0.7,
+    "dividend_share": 0.1,
+    "cash_yield": 0.03,
+    "annual_dilution": 0.0,
+    "repurchase_price": "market"
+   },
+   "assumptions": "buybacks 70% of FCF (3-yr average), dividends 10%, SBC expensed in the DCF"
+  }
+ ]
+}

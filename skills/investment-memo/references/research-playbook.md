@@ -65,6 +65,7 @@ For a full industry study, use the sibling `us-industry-deepdive` skill. For the
   3. Cash conversion — FCF-after-SBC / core NI >100% = 3; >80% = 2; 50–80% = 1; <50% = 0 (explain capex cycles).
   4. Moat — 2+ strong moats = 3; one clear = 2; weak = 1; none = 0.
   10–12 A · 7–9 B · 4–6 C · 0–3 D. Quality sets the margin of safety, not the rating by itself.
+  **Governance cap:** an open governance red flag caps the grade at B. Red flags are a CEO or CFO exit tied to an investigation, a material weakness in internal control, a restatement in the last 3 years, an auditor resignation, or a material undisclosed related-party dealing. Name the flag next to the grade.
 - **Fisher spot-checks** (pick the 3–4 that are most diagnostic for this company): durable sales runway; R&D effectiveness relative to size; sales organization strength; margin-improvement plans; long-range vs short-range profit outlook; candor when things go wrong; equity-financing needs that would dilute growth; management integrity.
 
 ---
@@ -87,7 +88,7 @@ A Key Force qualifies if it plausibly moves fair value by ≥15–20%. A salient
 
 ## 7. Pass F — Red team (this must be able to change the answer)
 
-Run these after the valuation draft, then revise the target, probabilities or rating if they land.
+Run these after the valuation draft, then revise if they land. Revise the **KPI values** in the scenario DCFs first; a scenario weight moves only under the valuation-core §7 rule (a cyclical base rate or a dated event, ≤10 points). The rating then follows from the calculator. Log each change and its cause in the workpapers.
 
 1. **Hidden risks scan** — regulatory, geopolitical, technological, competitive, supply-chain, environmental, governance/behavioral. For each candidate: title (≤10 words); structural vs event-driven; mechanism of impact; why it isn't yet visible in the financials; early indicators; likelihood × impact (L/M/H). Rank the top three under-appreciated risks.
 2. **Devil's advocate** — argue **against your own call**: for a Buy, the strongest short thesis; for an Avoid/Sell, the strongest long thesis (what would make today's price cheap). Write it as a skeptical buy-side analyst would: fundamentals first (industry, business, management, financial statements), valuation last. Deliberately seek negative sources (short reports, lawsuits, critical former employees, competitor claims) and keep only arguments supported by facts.
@@ -100,18 +101,19 @@ Run these after the valuation draft, then revise the target, probabilities or ra
 
 ## 8. Pass G — Decision rules
 
-- **Rating** — the label depends on whether the user already owns it:
+- **Rating** — walk the rows in order; the **first** that matches wins. The label depends on whether the user already owns it. `valuation.py scenarios` applies this table from `rating_flags`; use its rating.
 
-  | Situation | New idea (no position) | Existing position |
-  |---|---|---|
-  | Expected IRR ≥ hurdle (15%), price ≤ action price, skew ≥ 2:1, no kill condition near trigger | **Buy** | **Add** |
-  | Thesis intact, IRR between cost of equity and hurdle | **Avoid (watchlist)** — give the action price | **Hold** |
-  | Thesis intact, IRR < cost of equity (price ahead of value) | **Avoid (watchlist)** | **Trim / Sell** |
-  | Kill condition triggered, thesis broken, or accounting score ≥ 7 | **Avoid** | **Sell** |
+  | # | Situation | New idea (no position) | Existing position |
+  |---|---|---|---|
+  | 1 | Kill condition triggered, thesis broken, accounting score ≥ 7, or quality D | **Avoid** | **Sell** |
+  | 2 | Expected IRR ≥ hurdle (15%), price ≤ action price, skew ≥ 2:1, no kill condition near trigger | **Buy** | **Add** |
+  | 3 | IRR ≥ hurdle but price > action price, skew < 2:1 or a kill condition near | **Avoid (watchlist, near miss)** — give the action price | **Hold** |
+  | 4 | IRR between cost of equity and hurdle | **Avoid (watchlist)** — give the action price | **Hold** |
+  | 5 | IRR < cost of equity (price ahead of value) | **Avoid (watchlist)** | **Trim** |
 
   For a watchlist name, write kill conditions as "if bought at the action price, exit if…". Low conviction + Avoid = watchlist, not a short.
-- **Conviction:** High / Medium / Low, driven by evidence quality on the Key Forces and how sensitive the value is to the uncertain inputs.
-- **Action price in the header** = the lower of (fair value today × (1 − MOS)) and (the max price that still earns the hurdle) — `valuation.py scenarios` prints it. MOS comes from the quality grade, not taste: A 15% · B 25% · C 35%, +10 points each for cyclical / policy-binary / levered >3.5x (two or more), cap 50% (valuation-core §7).
+- **Conviction:** start at High and step down one level for each that applies: (a) no variant view, or the reverse-DCF growth within ±1 point of our base case; (b) a Key Force rests on management-only or ⚠ secondary evidence; (c) the base-case value moves >25% across the WACC ±1pt swing or the beta used; (d) an open governance red flag. Floor at Low. Name the steps in the workpapers.
+- **Action price in the header** = the lower of (fair value today × (1 − MOS)) and (the max price that still earns the hurdle) — `valuation.py scenarios` prints it. MOS comes from the quality grade, not taste: A 15% · B 25% · C 35%, +10 points for each of cyclical / policy-binary (≥25% of revenue) / levered >3.5x, cap 50% (valuation-core §7).
 - **Sizing guidance** (default; the user's own rules override): High conviction & bear-case loss <25% → full position; Medium → half; Low → starter or watchlist. Size for the bear case.
 - **Kill conditions** — 2–4, each tied to a thesis pillar, measurable, dated, and leading to exit **regardless of price**. "If NRR < 105% for two consecutive quarters by Q2'27 → exit" passes; "if growth slows" doesn't. Distinct from a price stop.
 - **Monitoring** — the 3–5 KPIs from the value-driver tree, each with current value, what the thesis needs, and a red line; plus a dated catalyst calendar and add/trim/exit triggers.

@@ -1,12 +1,16 @@
 {
  "unit": "USD M",
- "_note": "Give each scenario its DCF value today (value_today); the script rolls it to the horizon at cost_of_equity net of dividend yield. Alternatively give `value` at the horizon directly (e.g. exit multiple x year-N EPS).",
+ "_note": "Give each scenario its DCF value today (value_today); the script rolls it to the horizon at cost_of_equity net of dividend yield. Alternatively give `value` at the horizon directly (e.g. exit multiple x year-N EPS). For a fundamentals-based target with buybacks, see scenarios_payout.json.",
  "price": 626,
  "years": 3,
  "dividend_yield": 0.0035,
  "cost_of_equity": 0.099,
  "hurdle": 0.15,
- "margin_of_safety": 0.25,
+ "margin_of_safety": {
+  "quality": "B",
+  "cyclical": true,
+  "policy_exposure": 0.05
+ },
  "scenarios": [
   {
    "name": "Bear",
@@ -16,15 +20,22 @@
   },
   {
    "name": "Base",
-   "prob": 0.45,
+   "prob": 0.5,
    "value_today": 583,
    "assumptions": "rev CAGR 10.9%, margin 32% → 37%, RONIC 20%"
   },
   {
    "name": "Bull",
-   "prob": 0.3,
+   "prob": 0.25,
    "value_today": 861,
    "assumptions": "rev CAGR 13.5%, margin → 42%, RONIC 25%"
   }
- ]
+ ],
+ "rating_flags": {
+  "kill_triggered": false,
+  "kill_near": false,
+  "thesis_broken": false,
+  "accounting_flag": false,
+  "owned": false
+ }
 }

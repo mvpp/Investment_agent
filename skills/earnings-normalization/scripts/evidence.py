@@ -59,7 +59,8 @@ def numeric_fields(obj, prefix=""):
         for i, val in enumerate(obj):
             yield from numeric_fields(val, f"{prefix}/{i}")
     elif isinstance(obj, bool):
-        if prefix.rsplit("/", 1)[-1] not in ("has_nci", "apply", "investment", "ipo_catch_up", "mid_year", "margin_grid"):
+        if prefix.rsplit("/", 1)[-1] not in ("has_nci", "apply", "investment", "ipo_catch_up", "mid_year", "margin_grid",
+                                             "cyclical", "owned", "kill_triggered", "kill_near", "thesis_broken", "accounting_flag"):
             raise ValueError(f"{prefix} cannot be a boolean")
     elif type(obj) in (int, float):
         yield prefix, number(obj, prefix)
@@ -73,7 +74,8 @@ def expected_unit(path, currency, scale):
     elif key in ("reported_diluted_eps", "price", "fair_value_today", "value_today", "fundamentals_based_target") or (key == "value" and path.startswith("/scenarios/")):
         expected = f"{currency}/share"
     elif key in ("tax_rate", "nci_fraction", "prob", "pos", "probability", "wacc", "cost_of_equity", "dividend_yield",
-                 "terminal_growth", "terminal_roic", "margin_of_safety", "hurdle"):
+                 "terminal_growth", "terminal_roic", "margin_of_safety", "hurdle", "policy_exposure",
+                 "buyback_share", "dividend_share", "cash_yield", "annual_dilution", "nwc_pct_down"):
         expected = "ratio"
     elif path.startswith("/gaap/") or key in ("revenue0", "amount", "pretax", "after_tax",
             "alt_normal_pretax", "normal_pretax", "normal_after_tax", "tax_effect", "gross_tax_effect", "cfo", "capex",

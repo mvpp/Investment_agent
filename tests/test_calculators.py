@@ -275,6 +275,97 @@ class CalculatorTests(unittest.TestCase):
             if not ok:
                 self.assertIn("Header target", result.stdout)
 
+    def test_down_year_capital_release(self):
+        base = {"unit": "USD M", "shares_unit": "M", "revenue0": 1000, "years": 3, "growth": [.1, -.2, .05],
+                "ebit_margin": .2, "tax_rate": .2, "wacc": .1, "terminal_growth": .02, "diluted_shares": 100}
+        s2c = self.calc("dcf", {**base, "sales_to_capital": 2})
+        self.assertAlmostEqual(s2c["rows"][0]["reinvestment"], 50)
+        self.assertEqual(s2c["rows"][1]["reinvestment"], 0)  # no capital released by default
+        released = self.calc("dcf", {**base, "sales_to_capital": 2, "sales_to_capital_down": 4})
+        self.assertAlmostEqual(released["rows"][1]["reinvestment"], -220 / 4)
+        self.assertTrue(any("sales_to_capital_down" in w for w in released["warnings"]))
+        capex = {**base, "capex_pct": .05, "ebitda_margin": .25, "asset_life": 5}
+        for nwc, extra, expected in [(.1, {}, 0), (-.1, {}, 22), (.1, {"nwc_pct_down": .05}, -11)]:
+            r = self.calc("dcf", {**capex, "nwc_pct": nwc, **extra})
+            row = r["rows"][1]
+            self.assertAlmostEqual(row["reinvestment"] - (row["capex"] - row["da"]), expected)
+
+    def payout_cfg(self, price, mid_year=True, **bridge):
+        model = {"unit": "USD M", "shares_unit": "M", "revenue0": 1000, "years": 5, "growth": .05, "ebit_margin": .2, "mid_year": mid_year,
+                 "tax_rate": .2, "sales_to_capital": 2, "wacc": .1, "terminal_growth": .02, "net_cash": 100, "diluted_shares": 100}
+        self.write(model, "model.json")
+        return {"unit": "USD M", "price": price, "years": 3, "cost_of_equity": .1, "hurdle": .15,
+                "scenarios": [{"name": "Base", "prob": 1, "dcf": "model.json", "horizon_bridge": bridge}]}
+
+    def test_payout_bridge(self):
+        # Buybacks at intrinsic value are neutral against cash that earns the cost of capital.
+        kept = self.calc("scenarios", self.payout_cfg(20, False, buyback_share=0, cash_yield=.1))
+        neutral = self.calc("scenarios", self.payout_cfg(20, False, buyback_share=1, cash_yield=.1, repurchase_price="intrinsic"))
+        self.assertAlmostEqual(neutral["expected_value"], kept["expected_value"])
+        none = self.calc("scenarios", self.payout_cfg(20, buyback_share=0))
+        row = none["rows"][0]
+        dcf = self.calc("dcf", read(self.dir / "model.json"))
+        self.assertAlmostEqual(row["horizon_net_cash"], 100 + sum(r["fcff"] for r in dcf["rows"][:3]))
+        self.assertEqual(row["horizon_diluted_shares"], 100)
+        cheap = self.calc("scenarios", self.payout_cfg(10, buyback_share=1))
+        dear = self.calc("scenarios", self.payout_cfg(40, buyback_share=1))
+        self.assertGreater(cheap["rows"][0]["buyback_value_effect"], 0)
+        self.assertLess(dear["rows"][0]["buyback_value_effect"], 0)
+        self.assertTrue(any("destroy" in w for w in dear["warnings"]))
+        first = cheap["rows"][0]["payout_schedule"][0]
+        self.assertAlmostEqual(first["repurchase_price"], 10 * 1.1)
+        self.assertAlmostEqual(first["shares_end"], 100 - first["fcff"] / 11)
+        self.assertAlmostEqual(first["net_cash_end"], 100)
+        self.calc("scenarios", self.payout_cfg(20, buyback_share=.5, net_cash=0), False)
+        self.calc("scenarios", self.payout_cfg(20, buyback_share=.8, dividend_share=.3), False)
+        legacy = self.calc("scenarios", self.payout_cfg(20, net_cash=0, diluted_shares=100))
+        self.assertTrue(any("prefer payout mode" in w for w in legacy["warnings"]))
+
+    def test_margin_of_safety_rule(self):
+        cfg = {"price": 100, "years": 3, "cost_of_equity": .1, "scenarios": [{"name": "Base", "prob": 1, "value_today": 100}]}
+        for mos, expected in [({"quality": "A", "cyclical": True, "policy_exposure": .3}, .35),
+                              ({"quality": "A", "cyclical": True, "policy_exposure": .2}, .25),
+                              ({"quality": "C", "cyclical": True, "policy_exposure": .5, "net_debt_ebitda": 4}, .5),
+                              ({"quality": "B"}, .25), (.2, .2)]:
+            r = self.calc("scenarios", {**cfg, "margin_of_safety": mos})
+            self.assertAlmostEqual(r["mos"], expected)
+        d = self.calc("scenarios", {**cfg, "margin_of_safety": {"quality": "D"}})
+        self.assertIsNone(d["action_price"])
+        self.assertEqual(d["rating"], "Avoid")
+        self.calc("scenarios", {**cfg, "margin_of_safety": {"quality": "E"}}, False)
+
+    def test_rating_rows_and_weights(self):
+        def scen(price, values, probs=(.25, .5, .25), **extra):
+            rows = [{"name": n, "prob": p, "value_today": v} for n, p, v in zip(("Bear", "Base", "Bull"), probs, values)]
+            return self.calc("scenarios", {"price": price, "years": 3, "cost_of_equity": .1, "hurdle": .15,
+                                           "margin_of_safety": .15, "scenarios": rows, **extra})
+        cases = [(60, (50, 100, 200), {}, "Buy", 2),
+                 (60, (50, 100, 200), {"rating_flags": {"kill_near": True}}, "Avoid (watchlist, near miss)", 3),
+                 (60, (50, 100, 200), {"rating_flags": {"kill_near": True, "owned": True}}, "Hold", 3),
+                 (95, (80, 100, 125), {}, "Avoid (watchlist)", 4),
+                 (130, (80, 100, 140), {"rating_flags": {"owned": True}}, "Trim", 5),
+                 (60, (50, 100, 200), {"rating_flags": {"thesis_broken": True, "owned": True}}, "Sell", 1)]
+        for price, values, extra, rating, row in cases:
+            with self.subTest(rating=rating):
+                r = scen(price, values, **extra)
+                self.assertEqual((r["rating"], r["rating_row"]), (rating, row))
+        self.assertTrue(any("weight_basis" in w for w in scen(95, (80, 100, 125), (.3, .45, .25))["warnings"]))
+        based = scen(95, (80, 100, 125), (.3, .45, .25), weight_basis="base rate")
+        self.assertFalse(any("25/50/25" in w for w in based["warnings"]))
+        self.assertTrue(any("10-point" in w for w in scen(95, (80, 100, 125), (.4, .4, .2), weight_basis="x")["warnings"]))
+
+    def test_memo_rating_tie(self):
+        calc = self.write({"expected_value": 120, "fair_value_today": 100, "action_price": 80, "rating": "Avoid (watchlist)"})
+        memo = self.dir / "memo.md"
+        body = ("# Target-rich environment\n{} · 截至 2025-10-29\nTarget (3 yr): $120 · Fair value today $100 · Action price ≤ $80\n\n"
+                "## Thesis and consensus\n## Key forces\n## Competitive position\n## Core EPS\n## Valuation\n## Risks\n"
+                "## Kill conditions\n- Growth below 2% by 2026\n- Margin below 3% by 2026\n## Monitoring\n## Sources\n")
+        for rating, ok in [("**Rating: AVOID (watchlist)**", True), ("评级：回避（观察名单）", True),
+                           ("Rating: Buy", False), ("Rating: Avoid", False)]:
+            memo.write_text(body.format(rating))
+            result = run(MEMO, memo, "--calc", calc)
+            self.assertEqual(result.returncode, 0 if ok else 1, result.stdout)
+
     def test_all_valuation_examples(self):
         for fp in sorted((VAL / "examples").glob("*.json")):
             cmd = fp.stem.split("_")[0]

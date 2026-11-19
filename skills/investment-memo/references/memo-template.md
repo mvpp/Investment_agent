@@ -9,7 +9,7 @@ Notation: `(E)` estimate · `(I)` inference · `⚠ verify` unconfirmed · citat
 ```markdown
 # $TICKER — <thesis in ≤15 words: the variant view, not a description>
 
-As of YYYY-MM-DD · Price $X · Mkt cap $XB · EV $XB · **Rating: BUY / AVOID (watchlist) / AVOID — or for holders ADD / HOLD / TRIM / SELL** · Conviction: High/Med/Low
+As of YYYY-MM-DD · Price $X · Mkt cap $XB · EV $XB · **Rating: <the calculator's `rating`: BUY / AVOID (watchlist, near miss) / AVOID (watchlist) / AVOID — or for holders ADD / HOLD / TRIM / SELL>** · Conviction: High/Med/Low
 **Target (prob-weighted, <horizon and basis>): $X (+Y%)** · Fair value today $X · Action price ≤ $X · Expected IRR X% vs hurdle 15% · Skew X:1 (or "n/a — price above bull case") · Position: full / half / starter / none
 
 <If the rating looks at odds with the target's % upside — e.g. AVOID with a +30% 3-yr target — add one line under the header: "At today’s price, the 3-year target implies an expected IRR of X% against a 15% hurdle.">
@@ -37,7 +37,7 @@ As of YYYY-MM-DD · Price $X · Mkt cap $XB · EV $XB · **Rating: BUY / AVOID (
 | Bull | | | | | |
 | **Prob-weighted** | | horizon <n> yr (<target basis>) | **$X** | **$X** | **+Y%** |
 
-Method: <primary + why it fits this business model>. Reverse DCF: price implies <X>; our base case <Y>. Skew is measured on today's values (`(Bull today − Price) / (Price − Bear today)`). Margin of safety <Z%> (quality <grade>) → action price $X.
+Method: <primary + why it fits this business model>. Reverse DCF: price implies <X>; our base case <Y>. Skew is measured on today's values (`(Bull today − Price) / (Price − Bear today)`). Margin of safety <calculator mos_note, e.g. "A 15% + cyclical 10 + policy-binary (30% of revenue) 10 = 35%"> → action price $X. Horizon bridge: <buyback_share>, repurchases at <market/list>, year-<H> shares <X> and net cash $<X> (base).
 
 ## 3. Business & Competitive Position  (≤380 words + 2 tables)
 
