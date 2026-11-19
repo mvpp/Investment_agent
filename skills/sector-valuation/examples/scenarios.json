@@ -11,6 +11,7 @@
   "cyclical": true,
   "policy_exposure": 0.05
  },
+ "weight_basis": "Skewed to the bull side: engagement and pricing data point to sustained ad-share gains; bear kept at 25% for a cyclical ad market (1 of the last 4 downturns cut revenue >15%).",
  "scenarios": [
   {
    "name": "Bear",
@@ -20,13 +21,13 @@
   },
   {
    "name": "Base",
-   "prob": 0.5,
+   "prob": 0.45,
    "value_today": 583,
    "assumptions": "rev CAGR 10.9%, margin 32% → 37%, RONIC 20%"
   },
   {
    "name": "Bull",
-   "prob": 0.25,
+   "prob": 0.3,
    "value_today": 861,
    "assumptions": "rev CAGR 13.5%, margin → 42%, RONIC 25%"
   }

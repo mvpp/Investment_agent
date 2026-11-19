@@ -349,10 +349,9 @@ class CalculatorTests(unittest.TestCase):
             with self.subTest(rating=rating):
                 r = scen(price, values, **extra)
                 self.assertEqual((r["rating"], r["rating_row"]), (rating, row))
-        self.assertTrue(any("weight_basis" in w for w in scen(95, (80, 100, 125), (.3, .45, .25))["warnings"]))
-        based = scen(95, (80, 100, 125), (.3, .45, .25), weight_basis="base rate")
-        self.assertFalse(any("25/50/25" in w for w in based["warnings"]))
-        self.assertTrue(any("10-point" in w for w in scen(95, (80, 100, 125), (.4, .4, .2), weight_basis="x")["warnings"]))
+        self.assertTrue(any("weight_basis" in w for w in scen(95, (80, 100, 125), (.5, .3, .2))["warnings"]))
+        skewed = scen(95, (80, 100, 125), (.5, .3, .2), weight_basis="bear-skewed: debt-funded customer capex")
+        self.assertFalse(any("weight_basis" in w for w in skewed["warnings"]))
 
     def test_memo_rating_tie(self):
         calc = self.write({"expected_value": 120, "fair_value_today": 100, "action_price": 80, "rating": "Avoid (watchlist)"})

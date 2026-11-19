@@ -717,13 +717,8 @@ def scenarios(c):
     action = None if quality_d else min(x for x in (mos_price, buy_for_hurdle) if x is not None)
     for s in sc:
         warn += [f"{s.get('name', '?')}: {w}" for w in s.get("warnings", [])]
-    if len(sc) == 3:
-        order = sorted(sc, key=lambda s: s.get(basis, 0))
-        off = max(abs(s["prob"] - p) for s, p in zip(order, (0.25, 0.5, 0.25)))
-        if off > 1e-6 and not c.get("weight_basis"):
-            warn.append("Weights differ from 25/50/25 without a weight_basis — define bear/base/bull at the ~20th/50th/80th percentile of the Key Force driver, or state the base rate / dated evidence that moves them.")
-        elif off > 0.10 + 1e-9:
-            warn.append(f"A weight moves {pct(off, 0)} from 25/50/25 — more than the 10-point limit; move the KPI values instead.")
+    if len(sc) > 1 and not c.get("weight_basis"):
+        warn.append("No weight_basis — state in one line which way the weights skew (which tail is fatter) and the evidence for it.")
     if bear < price * 0.6:
         warn.append(f"Bear case ({'today' if have_today else 'horizon'} value) implies {pct(bear / price - 1)} — size the position for that loss, not the expected value.")
     if skew is not None and skew < 2:

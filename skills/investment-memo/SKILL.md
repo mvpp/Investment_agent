@@ -33,7 +33,7 @@ Read `references/research-playbook.md` for the detail behind each pass (evidence
 4. **Core earnings** — run the `earnings-normalization` workflow: bridge table, core EPS/FCF, accounting score.
 5. **Valuation** — run the `sector-valuation` workflow on core numbers: business-model method, KPI estimates with confidence, DCF/SOTP/rNPV/NAV via the calculator, reverse DCF, scenarios → target, IRR, action price.
 6. **Expectations** (§6) — consensus vs market-implied vs ours → the variant view sentence. No variant view → lower conviction; say so.
-7. **Red team** (§7) — hidden risks, devil's advocate, six-lens check, pre-mortem, thesis check, bias check. Then **revise** if any of it lands — KPI values first; weights only under the valuation-core §7 rule — and rerun the calculator. A red team that never changes anything is theater.
+7. **Red team** (§7) — hidden risks, devil's advocate, six-lens check, pre-mortem, thesis check, bias check. Then **revise** KPI values or scenario weights if any of it lands, log the change, and rerun the calculator. A red team that never changes anything is theater.
 8. **Decide** (§8) — rating, conviction, sizing guidance, 2–4 kill conditions (for an Avoid on a new idea: entry conditions + the kill conditions that would apply once bought), monitoring KPIs, catalysts, add/trim/exit triggers.
 9. **Write and compress** — fill `references/memo-template.md`, apply its compression rules, then run `python3 scripts/memo_check.py memo.md --calc scenarios_out.json` (the `valuation.py scenarios ... --json` output) and fix until it passes (≤5 pages, required sections present, numeric kill conditions, no filler, header target / fair value / action price / rating equal to the calculator's).
 

@@ -88,7 +88,7 @@ A Key Force qualifies if it plausibly moves fair value by ≥15–20%. A salient
 
 ## 7. Pass F — Red team (this must be able to change the answer)
 
-Run these after the valuation draft, then revise if they land. Revise the **KPI values** in the scenario DCFs first; a scenario weight moves only under the valuation-core §7 rule (a cyclical base rate or a dated event, ≤10 points). The rating then follows from the calculator. Log each change and its cause in the workpapers.
+Run these after the valuation draft, then revise the KPI values, scenario weights or both if they land, and rerun the calculator — the rating follows from it. Log each change and its cause in the workpapers.
 
 1. **Hidden risks scan** — regulatory, geopolitical, technological, competitive, supply-chain, environmental, governance/behavioral. For each candidate: title (≤10 words); structural vs event-driven; mechanism of impact; why it isn't yet visible in the financials; early indicators; likelihood × impact (L/M/H). Rank the top three under-appreciated risks.
 2. **Devil's advocate** — argue **against your own call**: for a Buy, the strongest short thesis; for an Avoid/Sell, the strongest long thesis (what would make today's price cheap). Write it as a skeptical buy-side analyst would: fundamentals first (industry, business, management, financial statements), valuation last. Deliberately seek negative sources (short reports, lawsuits, critical former employees, competitor claims) and keep only arguments supported by facts.
