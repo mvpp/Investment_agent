@@ -18,6 +18,10 @@ Paths to scripts and references below are relative to this skill's directory (si
 
 Confirm (ask only what you can't infer): ticker; purpose — **new idea**, **existing position review**, or **post-earnings update** (→ Update mode below); horizon (default 3 years for both the target price and the IRR — one horizon keeps the numbers consistent); any portfolio rules (position sizing, hurdle rate). Match the user's language for the memo (Chinese request → Chinese memo; keep tickers, metrics and accounting terms in English where natural), unless the user or system prompt specifies an output language.
 
+**Unattended runs.** When the request says no one can answer questions (a scheduled job, a hosted agent, a batch), don't ask: take the ticker and any stated purpose from the request, use the defaults for everything else (new idea, 3-year horizon, 15% hurdle, the request's language), and say in one line under the memo header which defaults were assumed. If something essential can't be established (the ticker doesn't exist, no filings are reachable), stop and say why instead of writing a memo on guesses.
+
+**Supplied data pack.** If the request points to a local folder of data (prices, statement history, consensus, peers, holders, a transcript, an earnings release), read its README first. Use the pack for orientation, screening, the competitor table, consensus and cross-checks — it saves searches. Calculator inputs still come from filings you read yourself (`../earnings-normalization/references/reading-filings.md`); where the pack and a filing disagree, the filing wins and the gap is worth one line in the workpapers. Cite pack data with the label its README gives.
+
 Get fresh data first: latest price, market cap, the most recent 10-K/10-Q, last call transcript, consensus estimates. Training-data knowledge is a starting hypothesis, never a source — later filings exist.
 - Read the filings yourself and build the data sheet per `../earnings-normalization/references/reading-filings.md` (5 years / 8 quarters / TTM, every number verbatim with its URL). Archive the evidence manifest and local filing extracts with the workpapers. Run the earnings and valuation calculators with `--require-evidence --json` and retain their output. [Evidence format](../earnings-normalization/references/evidence.md)
 - **Every 8-K filed after the latest quarter end.** Financings, share issuance (forward sales, mandatory converts, ATMs), splits/stock dividends, settlements and M&A after the period change the share count, net debt and thesis; they never show up in the quarter's statements.
@@ -52,6 +56,7 @@ The reader is going to make a decision and then track it. Every extra paragraph 
 
 - Default: the memo as Markdown, saved to `memos/<TICKER>_<YYYY-MM-DD>.md` in the working directory, and shown in the conversation.
 - Optional (if asked): `.docx`/`.pdf` via the docx/pdf skills; a workpapers file with the full research; a thesis card (below).
+- If the request names output paths, write there instead: the memo, and next to it the scenarios JSON the memo's header was checked against (`valuation.py scenarios <input> --json`, saved unedited) so a host can collect both. Finish only after `memo_check.py <memo> --calc <that JSON>` passes on the saved files.
 - End the reply with 2–3 lines: rating/target/action price, the single most important thing to watch, and any ⚠ items needing the user's verification.
 
 ## Update mode (after earnings or news)
